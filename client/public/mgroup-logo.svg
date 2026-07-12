@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">M Group</title>
+  <desc id="desc">Logo circulaire M Group pour la page de connexion</desc>
+  <defs>
+    <linearGradient id="markGradient" x1="16" x2="80" y1="16" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#159bd3"/>
+      <stop offset="0.52" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#ff8a2a"/>
+    </linearGradient>
+    <linearGradient id="letterGradient" x1="25" x2="71" y1="24" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0b5e91"/>
+      <stop offset="1" stop-color="#ff8a2a"/>
+    </linearGradient>
+  </defs>
+  <circle cx="48" cy="48" r="45" fill="#ffffff"/>
+  <circle cx="48" cy="48" r="42" fill="url(#markGradient)" opacity="0.95"/>
+  <circle cx="48" cy="48" r="34" fill="#ffffff"/>
+  <path
+    fill="url(#letterGradient)"
+    d="M24 66V30h9.3l14.5 20.3L62.3 30H72v36H61.8V46.5L50.7 62h-5.9L34.2 46.7V66H24Z"
+  />
+</svg>

@@ -211,11 +211,12 @@ function GatewayView({ onAdmin, onOther }) {
       {/* Premiere porte d'entree : on choisit le parcours avant tout acces. */}
       <div className="gateway-card">
         <a className="brand dark gateway-brand" href="#start" aria-label="M Group">
-          <span className="brand-mark">M</span>
-          <span>M Group</span>
+          <span className="gateway-logo-mark">
+            <img src="/mgroup-logo.svg" alt="" />
+          </span>
         </a>
-        <p className="eyebrow">Mode test</p>
-        <h1>Qui souhaite acceder a la plateforme ?</h1>
+        {/*<p className="eyebrow">Mode test</p>*/}
+        <h2>Qui souhaite acceder a la plateforme ?</h2>
         <p>
           Le patron configure d'abord l'entreprise et son compte admin. Les
           autres utilisateurs demandent une inscription, puis attendent la
@@ -358,6 +359,11 @@ function AuthPage({
     <section className="auth-page" aria-label="Connexion et inscription">
       {/* Page de connexion finale : utilisee apres deconnexion et pour Mon Espace. */}
       <div className="auth-card">
+        {/* Logo entreprise : cercle visuel place en haut du formulaire de connexion. */}
+        <div className="auth-logo-frame">
+          <img src="/mgroup-logo.svg" alt="Logo M Group" />
+        </div>
+
         <div className="auth-switch" role="tablist" aria-label="Choisir connexion ou inscription">
           <button
             type="button"
