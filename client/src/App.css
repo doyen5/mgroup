@@ -1,184 +1,1334 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  color: var(--accent);
-  background: var(--accent-bg);
-  border: 2px solid transparent;
-  transition: border-color 0.3s;
-  margin-bottom: 24px;
+/* Conteneur global de l'application React. */
+.site-shell {
+  min-height: 100vh;
+  background: #f7fbff;
+  color: #10233f;
+}
 
-  &:hover {
-    border-color: var(--accent-border);
+/* Animations globales : elles donnent une arrivee fluide aux blocs de la page. */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
   }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-.hero {
+@keyframes fadeDown {
+  from {
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroZoom {
+  from {
+    transform: scale(1);
+  }
+
+  to {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes softGlow {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+/* Ecran dedie au premier lancement : rien n'est rendu derriere le setup. */
+.setup-only-shell {
+  display: grid;
+  min-height: 100vh;
+}
+
+/* Premiere page de test : choix du parcours administrateur ou autre utilisateur. */
+.gateway-page,
+.auth-page,
+.setup-page {
   position: relative;
-
-  .base,
-  .framework,
-  .vite {
-    inset-inline: 0;
-    margin: 0 auto;
-  }
-
-  .base {
-    width: 170px;
-    position: relative;
-    z-index: 0;
-  }
-
-  .framework,
-  .vite {
-    position: absolute;
-  }
-
-  .framework {
-    z-index: 1;
-    top: 34px;
-    height: 28px;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(44deg) rotateY(39deg)
-      scale(1.4);
-  }
-
-  .vite {
-    z-index: 0;
-    top: 107px;
-    height: 26px;
-    width: auto;
-    transform: perspective(2000px) rotateZ(300deg) rotateX(40deg) rotateY(39deg)
-      scale(0.8);
-  }
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 15%, rgba(21, 155, 211, 0.2), transparent 28%),
+    radial-gradient(circle at 82% 86%, rgba(255, 138, 42, 0.2), transparent 26%),
+    linear-gradient(135deg, #eef7ff 0%, #ffffff 52%, #eaf7ff 100%);
 }
 
-#center {
+.gateway-page::before,
+.auth-page::before,
+.setup-page::before {
+  content: '';
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: rgba(21, 155, 211, 0.16);
+  filter: blur(10px);
+  animation: softGlow 6s ease-in-out infinite;
+}
+
+.gateway-card,
+.auth-card,
+.setup-panel {
+  position: relative;
+  z-index: 1;
+}
+
+.gateway-card {
+  width: min(760px, 100%);
+  padding: 34px;
+  border: 1px solid rgba(207, 232, 251, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 30px 80px rgba(16, 82, 129, 0.16);
+  backdrop-filter: blur(18px);
+  text-align: center;
+  animation: fadeUp 0.7s ease both;
+}
+
+.gateway-brand {
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.gateway-card h1 {
+  max-width: 620px;
+  margin: 0 auto 14px;
+  color: #10233f;
+  font-size: 3.3rem;
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.gateway-card p:not(.eyebrow) {
+  max-width: 620px;
+  margin: 0 auto 24px;
+  color: #58708f;
+}
+
+.gateway-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+/* Pages d'authentification : design plein ecran apres deconnexion ou Mon Espace. */
+.auth-card {
+  width: min(620px, 100%);
+  padding: 30px;
+  border: 1px solid rgba(207, 232, 251, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 30px 90px rgba(16, 82, 129, 0.16);
+  backdrop-filter: blur(18px);
+  animation: fadeUp 0.7s ease both;
+}
+
+.auth-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.auth-switch button {
+  min-height: 54px;
+  border: 0;
+  border-radius: 8px;
+  color: #4f627a;
+  background: linear-gradient(135deg, #eef4ff, #f4f4f4);
+  font-weight: 850;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.auth-switch button.active {
+  color: #0b5e91;
+  background: linear-gradient(135deg, #dfeeff, #edf4ff);
+  box-shadow: inset 0 -2px 0 rgba(21, 155, 211, 0.35);
+}
+
+.auth-switch button:hover,
+.social-row button:hover {
+  transform: translateY(-2px);
+}
+
+.auth-notice {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #cfe8fb;
+  border-radius: 8px;
+  color: #0b5e91;
+  background: #eef7ff;
+}
+
+.auth-lead,
+.auth-separator,
+.auth-bottom {
+  color: #304961;
+  text-align: center;
+}
+
+.social-row {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  margin: 16px 0 22px;
+}
+
+.social-row button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  color: #2f6dd4;
+  background: #ffffff;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(47, 109, 212, 0.12);
+  transition: transform 0.2s ease;
+}
+
+.auth-separator {
+  margin-bottom: 18px;
+}
+
+.auth-form.clean {
+  gap: 20px;
+}
+
+.auth-form.clean label {
+  color: #5b6778;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.auth-form.clean input {
+  min-height: 48px;
+  border: 0;
+  border-bottom: 1px solid #cfe1ef;
+  border-radius: 0;
+  background: transparent;
+  padding-inline: 0;
+}
+
+.auth-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.auth-options button,
+.auth-bottom button {
+  border: 0;
+  color: #2f6dd4;
+  background: transparent;
+  font-weight: 700;
+}
+
+.check-row {
+  display: inline-flex;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-row input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  accent-color: #2f6dd4;
+}
+
+.auth-submit {
+  min-height: 48px;
+  margin-top: 2px;
+  background: linear-gradient(135deg, #2f6dd4, #4a8df0);
+  box-shadow: 0 14px 30px rgba(47, 109, 212, 0.28);
+}
+
+.auth-bottom {
+  margin: 6px 0 0;
+}
+
+.password-card,
+.pending-card {
+  text-align: center;
+}
+
+.password-card h1,
+.pending-card h1 {
+  margin: 0 0 16px;
+  color: #10233f;
+  font-size: 2.7rem;
+  line-height: 1.04;
+  letter-spacing: 0;
+}
+
+/* Hero plein ecran : image evenementielle + voile bleu pour garder le texte lisible. */
+.hero-section {
+  position: relative;
+  min-height: 92vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 25px;
-  place-content: center;
-  place-items: center;
-  flex-grow: 1;
-
-  @media (max-width: 1024px) {
-    padding: 32px 20px 24px;
-    gap: 18px;
-  }
 }
 
-#next-steps {
-  display: flex;
-  border-top: 1px solid var(--border);
-  text-align: left;
-
-  & > div {
-    flex: 1 1 0;
-    padding: 32px;
-    @media (max-width: 1024px) {
-      padding: 24px 20px;
-    }
-  }
-
-  .icon {
-    margin-bottom: 16px;
-    width: 22px;
-    height: 22px;
-  }
-
-  @media (max-width: 1024px) {
-    flex-direction: column;
-    text-align: center;
-  }
+.hero-bg,
+.hero-overlay {
+  position: absolute;
+  inset: 0;
 }
 
-#docs {
-  border-right: 1px solid var(--border);
-
-  @media (max-width: 1024px) {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-}
-
-#next-steps ul {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  gap: 8px;
-  margin: 32px 0 0;
-
-  .logo {
-    height: 18px;
-  }
-
-  a {
-    color: var(--text-h);
-    font-size: 16px;
-    border-radius: 6px;
-    background: var(--social-bg);
-    display: flex;
-    padding: 6px 12px;
-    align-items: center;
-    gap: 8px;
-    text-decoration: none;
-    transition: box-shadow 0.3s;
-
-    &:hover {
-      box-shadow: var(--shadow);
-    }
-    .button-icon {
-      height: 18px;
-      width: 18px;
-    }
-  }
-
-  @media (max-width: 1024px) {
-    margin-top: 20px;
-    flex-wrap: wrap;
-    justify-content: center;
-
-    li {
-      flex: 1 1 calc(50% - 8px);
-    }
-
-    a {
-      width: 100%;
-      justify-content: center;
-      box-sizing: border-box;
-    }
-  }
-}
-
-#spacer {
-  height: 88px;
-  border-top: 1px solid var(--border);
-  @media (max-width: 1024px) {
-    height: 48px;
-  }
-}
-
-.ticks {
-  position: relative;
+.hero-bg {
   width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  animation: heroZoom 16s ease-in-out infinite alternate;
+}
 
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    top: -4.5px;
-    border: 5px solid transparent;
+.hero-overlay {
+  background:
+    linear-gradient(90deg, rgba(7, 28, 53, 0.9) 0%, rgba(7, 28, 53, 0.7) 46%, rgba(14, 129, 190, 0.24) 100%),
+    linear-gradient(180deg, rgba(247, 251, 255, 0) 70%, #f7fbff 100%);
+}
+
+/* Barre de navigation commune a l'accueil. */
+.topbar {
+  width: min(1180px, calc(100% - 32px));
+  margin: 16px auto 0;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 45px rgba(0, 36, 76, 0.18);
+  animation: fadeDown 0.7s ease both;
+}
+
+.brand,
+.nav-actions,
+.hero-actions,
+.footer,
+.dashboard-actions,
+.choice-actions {
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  gap: 10px;
+  color: #ffffff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.brand.dark {
+  color: #10233f;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #ffffff;
+  background: #ff8a2a;
+  box-shadow: 0 12px 28px rgba(255, 138, 42, 0.28);
+}
+
+.nav-actions,
+.hero-actions,
+.dashboard-actions,
+.choice-actions {
+  gap: 10px;
+}
+
+/* Boutons reutilisables : orange pour l'action principale, blanc/bleu pour l'action secondaire. */
+button,
+.primary-button,
+.secondary-button {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.primary-button,
+.secondary-button,
+.danger-button,
+.icon-access-button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 16px;
+  font-weight: 750;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.primary-button {
+  color: #ffffff;
+  background: #ff8a2a;
+  box-shadow: 0 14px 28px rgba(255, 138, 42, 0.26);
+}
+
+.primary-button:hover {
+  background: #f07816;
+  transform: translateY(-1px);
+}
+
+.secondary-button {
+  color: #0b5e91;
+  background: #ffffff;
+}
+
+.secondary-button:hover {
+  transform: translateY(-1px);
+}
+
+.secondary-button.bordered {
+  border: 1px solid #b8dcf2;
+}
+
+.danger-button {
+  color: #ffffff;
+  background: #e6503d;
+  box-shadow: 0 14px 28px rgba(230, 80, 61, 0.2);
+}
+
+.danger-button:hover {
+  background: #cf3f2e;
+  transform: translateY(-1px);
+}
+
+/* Acces par icones dans Mon Espace : Gmail et contact sont cote a cote. */
+.quick-access {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.icon-access-button {
+  min-height: 52px;
+  padding: 0;
+  color: #17324f;
+  background: #ffffff;
+  border: 1px solid #cfe1ef;
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.icon-access-button:hover {
+  background: #eef7ff;
+  border-color: #9fd8f5;
+  transform: translateY(-2px);
+}
+
+.gmail-icon,
+.contact-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+}
+
+.gmail-icon {
+  border-radius: 50%;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, #4285f4 0 25%, #34a853 25% 50%, #fbbc05 50% 75%, #ea4335 75% 100%);
+  font-weight: 900;
+}
+
+.contact-icon svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: #159bd3;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+}
+
+/* Texte reserve aux lecteurs d'ecran pour garder les boutons sous forme d'icones. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.large {
+  min-height: 46px;
+  padding-inline: 20px;
+}
+
+.full {
+  width: 100%;
+}
+
+/* Texte principal de la landing page. */
+.hero-content {
+  position: relative;
+  z-index: 1;
+  width: min(1180px, calc(100% - 32px));
+  margin: auto;
+  padding: 92px 0 120px;
+  color: #ffffff;
+}
+
+.hero-content .eyebrow,
+.hero-content h1,
+.hero-copy,
+.hero-actions {
+  opacity: 0;
+  animation: fadeUp 0.7s ease both;
+}
+
+.hero-content .eyebrow {
+  animation-delay: 0.14s;
+}
+
+.hero-content h1 {
+  animation-delay: 0.24s;
+}
+
+.hero-copy {
+  animation-delay: 0.34s;
+}
+
+.hero-actions {
+  animation-delay: 0.44s;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: #ffb36b;
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hero-content h1 {
+  max-width: 760px;
+  margin: 0;
+  color: #ffffff;
+  font-size: 5.4rem;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.hero-copy {
+  max-width: 620px;
+  margin: 22px 0 28px;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 1.08rem;
+}
+
+/* Sections de contenu sous le hero. */
+.content-section,
+.split-section,
+.footer {
+  width: min(1180px, calc(100% - 32px));
+  margin-inline: auto;
+}
+
+.content-section {
+  padding: 72px 0 54px;
+  animation: fadeUp 0.8s ease both;
+  animation-delay: 0.08s;
+}
+
+/* Section A Propos : image a gauche, texte a droite, comme demande. */
+.about-section {
+  width: min(1180px, calc(100% - 32px));
+  margin: 72px auto 0;
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 36px;
+  align-items: center;
+  animation: fadeUp 0.8s ease both;
+}
+
+.about-media {
+  min-height: 380px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid #cfe8fb;
+  box-shadow: 0 28px 70px rgba(16, 82, 129, 0.14);
+}
+
+.about-media img {
+  width: 100%;
+  height: 100%;
+  min-height: 380px;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.about-media:hover img {
+  transform: scale(1.05);
+}
+
+.about-content {
+  padding: 12px 0;
+}
+
+.about-content h2 {
+  margin: 0 0 18px;
+  color: #10233f;
+  font-size: 2.8rem;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.about-content p:not(.eyebrow) {
+  margin: 0 0 14px;
+  color: #58708f;
+}
+
+.section-heading {
+  max-width: 680px;
+  margin: 0 auto 34px;
+  text-align: center;
+}
+
+.section-heading h2,
+.split-section h2,
+.setup-heading h2,
+.approval-panel h2 {
+  margin: 0;
+  color: #10233f;
+  font-size: 2.8rem;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.section-heading p,
+.split-section p,
+.setup-heading p,
+.dashboard-hero p {
+  color: #58708f;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.feature-card {
+  overflow: hidden;
+  min-height: 340px;
+  padding: 0;
+  border: 1px solid #cfe8fb;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 248, 255, 0.96)),
+    #ffffff;
+  box-shadow: 0 24px 55px rgba(16, 82, 129, 0.09);
+  opacity: 0;
+  animation: fadeUp 0.7s ease both;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.feature-media {
+  height: 150px;
+  overflow: hidden;
+}
+
+.feature-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.45s ease;
+}
+
+.feature-card:hover .feature-media img {
+  transform: scale(1.06);
+}
+
+.feature-body {
+  padding: 22px 24px 24px;
+}
+
+.feature-card:nth-child(1) {
+  animation-delay: 0.12s;
+}
+
+.feature-card:nth-child(2) {
+  animation-delay: 0.22s;
+}
+
+.feature-card:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+.feature-card:hover {
+  border-color: #9fd8f5;
+  box-shadow: 0 28px 70px rgba(16, 82, 129, 0.15);
+  transform: translateY(-6px);
+}
+
+.feature-card span {
+  display: inline-flex;
+  margin-bottom: 22px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: #0b6ea7;
+  background: #e0f3ff;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.feature-card h3 {
+  margin: 0 0 10px;
+  color: #10233f;
+  font-size: 1.35rem;
+  letter-spacing: 0;
+}
+
+.feature-card p {
+  margin: 0;
+  color: #617792;
+}
+
+.split-section {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 38px;
+  align-items: center;
+  margin-top: 24px;
+  padding: 34px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #d8edf9;
+  animation: fadeUp 0.8s ease both;
+  animation-delay: 0.2s;
+}
+
+.footer {
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 48px;
+  padding: 26px 28px;
+  border: 1px solid rgba(207, 232, 251, 0.7);
+  border-radius: 8px 8px 0 0;
+  color: rgba(255, 255, 255, 0.86);
+  background:
+    linear-gradient(135deg, rgba(8, 44, 79, 0.96), rgba(21, 155, 211, 0.84)),
+    #10233f;
+  font-size: 0.95rem;
+  animation: fadeUp 0.8s ease both;
+  animation-delay: 0.28s;
+}
+
+/* Dashboard de demonstration : il servira de base a la future interface admin. */
+.dashboard-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 18px 0 56px;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px;
+  border: 1px solid #cfe8fb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(16, 82, 129, 0.08);
+}
+
+.time-chip {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid #cfe8fb;
+  border-radius: 8px;
+  color: #0b5e91;
+  background: #f7fbff;
+  font-weight: 800;
+}
+
+/* Profil connecte : photo/avatar, nom complet, role et message de bienvenue. */
+.profile-welcome {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 20px;
+  border: 1px solid #cfe8fb;
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(238, 247, 255, 0.96)),
+    #ffffff;
+  box-shadow: 0 20px 50px rgba(16, 82, 129, 0.08);
+  animation: fadeUp 0.7s ease both;
+}
+
+.profile-avatar {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(255, 138, 42, 0.95), rgba(21, 155, 211, 0.95)),
+    #ff8a2a;
+  box-shadow: 0 18px 36px rgba(255, 138, 42, 0.22);
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
+.profile-welcome h2 {
+  margin: 0 0 8px;
+  color: #10233f;
+  font-size: 1.8rem;
+  letter-spacing: 0;
+}
+
+.role-badge {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: #0b6ea7;
+  background: #e0f3ff;
+  font-weight: 850;
+}
+
+.welcome-message {
+  margin: 10px 0 0;
+  color: #58708f;
+}
+
+.last-login-inline {
+  max-width: 300px;
+  margin: 0;
+  color: #58708f;
+  text-align: right;
+}
+
+.dashboard-hero {
+  padding: 72px 0 34px;
+}
+
+.dashboard-hero h1 {
+  max-width: 760px;
+  margin: 0 0 16px;
+  color: #10233f;
+  font-size: 4rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.dashboard-hero p {
+  max-width: 660px;
+  margin: 0;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.dashboard-card,
+.approval-panel {
+  border: 1px solid #cfe8fb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 20px 50px rgba(16, 82, 129, 0.08);
+}
+
+.dashboard-card {
+  padding: 24px;
+}
+
+.metric {
+  display: block;
+  margin-bottom: 16px;
+  color: #159bd3;
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: 850;
+}
+
+.dashboard-card p {
+  margin: 0;
+  color: #58708f;
+}
+
+.approval-panel {
+  margin-top: 18px;
+  padding: 24px;
+}
+
+.approval-row {
+  display: grid;
+  grid-template-columns: 1fr 180px 130px;
+  gap: 12px;
+  align-items: center;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #d8edf9;
+}
+
+.approval-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.approval-row strong {
+  color: #10233f;
+}
+
+.approval-row span {
+  color: #6a7e96;
+}
+
+/* Notification en bas a droite : disparait automatiquement apres 5 secondes. */
+.login-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 30;
+  display: grid;
+  gap: 4px;
+  width: min(360px, calc(100% - 40px));
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 8px;
+  color: #ffffff;
+  background:
+    linear-gradient(135deg, rgba(16, 35, 63, 0.96), rgba(21, 155, 211, 0.9)),
+    #10233f;
+  box-shadow: 0 24px 60px rgba(7, 28, 53, 0.28);
+  animation: fadeUp 0.35s ease both;
+}
+
+.login-toast span {
+  color: rgba(255, 255, 255, 0.84);
+}
+
+/* Modals : utilises pour Mon Espace et pour la configuration initiale. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 27, 49, 0.62);
+}
+
+.setup-backdrop {
+  z-index: 20;
+  background:
+    radial-gradient(circle at top left, rgba(21, 155, 211, 0.3), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(255, 138, 42, 0.28), transparent 32%),
+    #eef7ff;
+}
+
+.auth-panel,
+.setup-panel,
+.confirm-panel {
+  position: relative;
+  width: min(430px, 100%);
+  max-height: min(92vh, 780px);
+  overflow: auto;
+  padding: 24px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 28px 70px rgba(7, 28, 53, 0.28);
+}
+
+.setup-panel {
+  width: min(880px, 100%);
+}
+
+.confirm-panel {
+  width: min(520px, 100%);
+}
+
+.close-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  color: #58708f;
+  background: #eef7ff;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 28px 0 14px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #eef7ff;
+}
+
+.auth-tabs button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 8px;
+  color: #45617d;
+  background: transparent;
+  font-weight: 800;
+}
+
+.auth-tabs button.active {
+  color: #ffffff;
+  background: #159bd3;
+}
+
+/* Formulaires : styles communs pour les champs admin, entreprise et utilisateur. */
+.auth-form,
+.setup-form {
+  display: grid;
+  gap: 14px;
+}
+
+.setup-heading {
+  max-width: 680px;
+  margin-bottom: 22px;
+}
+
+.setup-heading.success {
+  margin: 0 auto 24px;
+  text-align: center;
+}
+
+/* Progression du setup : une partie du modal s'affiche apres validation de la precedente. */
+.setup-steps {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.setup-step {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfe1ef;
+  border-radius: 8px;
+  color: #58708f;
+  background: #f7fbff;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.setup-step.active {
+  color: #ffffff;
+  background: #159bd3;
+  border-color: #159bd3;
+}
+
+.setup-step.done {
+  color: #0b6ea7;
+  background: #e0f3ff;
+  border-color: #9fd8f5;
+}
+
+.setup-form fieldset {
+  margin: 0;
+  padding: 18px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+}
+
+.setup-form legend {
+  padding: 0 8px;
+  color: #0b6ea7;
+  font-weight: 850;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.auth-form label,
+.setup-form label {
+  display: grid;
+  gap: 7px;
+  color: #304961;
+  font-size: 0.92rem;
+  font-weight: 760;
+}
+
+.auth-form input,
+.auth-form select,
+.setup-form input,
+.setup-form select,
+.approval-row select {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid #cfe1ef;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #10233f;
+  background: #fbfdff;
+}
+
+.auth-form input[type='file'],
+.setup-form input[type='file'] {
+  padding: 10px 12px;
+}
+
+.form-note {
+  margin: 0;
+  color: #58708f;
+  font-size: 0.88rem;
+}
+
+.choice-actions {
+  justify-content: center;
+}
+
+/* Actions de l'etape patron : retour possible ou validation finale. */
+.setup-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 10px;
+}
+
+.auth-form input:focus,
+.auth-form select:focus,
+.setup-form input:focus,
+.setup-form select:focus,
+.approval-row select:focus,
+.auth-switch button:focus-visible,
+.social-row button:focus-visible,
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.danger-button:focus-visible,
+.icon-access-button:focus-visible,
+.close-button:focus-visible,
+.auth-tabs button:focus-visible {
+  outline: 3px solid rgba(21, 155, 211, 0.36);
+  outline-offset: 2px;
+}
+
+/* Responsive tablette : les grilles passent sur une colonne. */
+@media (max-width: 860px) {
+  .topbar,
+  .dashboard-header {
+    align-items: stretch;
+    flex-wrap: wrap;
   }
 
-  &::before {
-    left: 0;
-    border-left-color: var(--border);
+  .nav-actions,
+  .dashboard-actions {
+    margin-left: auto;
   }
-  &::after {
-    right: 0;
-    border-right-color: var(--border);
+
+  .hero-section {
+    min-height: 88vh;
+  }
+
+  .hero-content {
+    padding: 74px 0 96px;
+  }
+
+  .hero-content h1 {
+    font-size: 3rem;
+    line-height: 1.04;
+  }
+
+  .dashboard-hero h1 {
+    font-size: 3rem;
+  }
+
+  .section-heading h2,
+  .split-section h2,
+  .setup-heading h2,
+  .approval-panel h2 {
+    font-size: 2.25rem;
+  }
+
+  .feature-grid,
+  .about-section,
+  .split-section,
+  .dashboard-grid,
+  .approval-row,
+  .profile-welcome {
+    grid-template-columns: 1fr;
+  }
+
+  .gateway-card h1,
+  .password-card h1,
+  .pending-card h1 {
+    font-size: 2.35rem;
+  }
+
+  .last-login-inline {
+    max-width: none;
+    text-align: left;
+  }
+}
+
+/* Responsive mobile : les boutons prennent toute la largeur utile. */
+@media (max-width: 560px) {
+  .topbar,
+  .about-section,
+  .content-section,
+  .split-section,
+  .footer,
+  .hero-content,
+  .dashboard-shell {
+    width: min(100% - 24px, 1180px);
+  }
+
+  .topbar {
+    gap: 12px;
+  }
+
+  .brand {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .gateway-actions,
+  .auth-switch,
+  .auth-options {
+    grid-template-columns: 1fr;
+  }
+
+  .gateway-actions,
+  .auth-options {
+    display: grid;
+  }
+
+  .nav-actions,
+  .hero-actions,
+  .footer,
+  .dashboard-actions,
+  .choice-actions {
+    width: 100%;
+  }
+
+  .nav-actions button,
+  .hero-actions .large,
+  .dashboard-actions button,
+  .choice-actions button {
+    flex: 1;
+  }
+
+  .hero-actions,
+  .footer,
+  .dashboard-actions,
+  .choice-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-content h1 {
+    font-size: 2.35rem;
+  }
+
+  .hero-copy {
+    font-size: 1rem;
+  }
+
+  .content-section {
+    padding-top: 52px;
+  }
+
+  .about-section {
+    margin-top: 52px;
+  }
+
+  .about-content h2 {
+    font-size: 2.2rem;
+  }
+
+  .about-media,
+  .about-media img {
+    min-height: 260px;
+  }
+
+  .split-section,
+  .setup-panel,
+  .auth-panel,
+  .auth-card,
+  .gateway-card {
+    padding: 20px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-steps,
+  .setup-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .time-chip {
+    width: 100%;
   }
 }
