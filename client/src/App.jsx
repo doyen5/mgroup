@@ -452,22 +452,28 @@ function RegisterWizard({ registerStep, onBack, onContinue, onSubmit }) {
           <span className="setup-step active">1. Identite</span>
           <span className="setup-step">2. Compte</span>
         </div>
-        <label>
-          Nom
-          <input type="text" placeholder="Votre nom" required />
-        </label>
-        <label>
-          Prenom(s)
-          <input type="text" placeholder="Vos prenoms" required />
-        </label>
-        <label>
-          Adresse
-          <input type="text" placeholder="Votre adresse" required />
-        </label>
-        <label>
-          Contact
-          <input type="tel" placeholder="+225 00 00 00 00 00" required />
-        </label>
+        {/* Nom/Prenom(s) restent sur la meme ligne sur desktop. */}
+        <div className="register-inline-grid">
+          <label>
+            Nom
+            <input type="text" placeholder="Votre nom" required />
+          </label>
+          <label>
+            Prenom(s)
+            <input type="text" placeholder="Vos prenoms" required />
+          </label>
+        </div>
+        {/* Adresse/Contact restent sur la meme ligne sur desktop. */}
+        <div className="register-inline-grid">
+          <label>
+            Adresse
+            <input type="text" placeholder="Votre adresse" required />
+          </label>
+          <label>
+            Contact
+            <input type="tel" placeholder="+225 00 00 00 00 00" required />
+          </label>
+        </div>
         <label>
           Photo
           <input type="file" accept="image/*" />
