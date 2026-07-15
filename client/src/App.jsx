@@ -9,10 +9,13 @@ import {
   ClipboardCheck,
   Copy,
   Eye,
+  History,
   Home,
+  Layers,
   LogOut,
   Mail,
   MessageCircle,
+  MonitorCog,
   Smartphone,
   UserPlus,
   Users,
@@ -93,6 +96,76 @@ const formatFcfa = (value) => `${new Intl.NumberFormat('fr-FR').format(value)} F
 // Lecture securisee d'un champ de formulaire HTML.
 const getFormValue = (formData, name) => String(formData.get(name) ?? '').trim()
 
+const settingsStorageKey = 'mgroup.admin.preferences'
+
+const defaultAdminSettings = {
+  display: {
+    theme: 'light',
+    language: 'fr',
+    dateFormat: 'full',
+    timezone: 'Africa/Abidjan',
+    density: 'comfortable',
+    widgets: {
+      budget: true,
+      events: true,
+      alerts: true,
+      team: true,
+      finance: true,
+    },
+  },
+  notifications: {
+    registration: true,
+    budget: true,
+    event: true,
+    email: true,
+    inApp: true,
+    reminderFrequency: 'daily',
+  },
+  modules: {
+    events: true,
+    finances: true,
+    rh: true,
+    commercial: true,
+    documents: false,
+    prestations: true,
+    reports: false,
+  },
+}
+
+const readAdminSettings = () => {
+  try {
+    const storedSettings = window.localStorage.getItem(settingsStorageKey)
+    return storedSettings
+      ? {
+          ...defaultAdminSettings,
+          ...JSON.parse(storedSettings),
+          display: {
+            ...defaultAdminSettings.display,
+            ...JSON.parse(storedSettings).display,
+            widgets: {
+              ...defaultAdminSettings.display.widgets,
+              ...JSON.parse(storedSettings).display?.widgets,
+            },
+          },
+          notifications: {
+            ...defaultAdminSettings.notifications,
+            ...JSON.parse(storedSettings).notifications,
+          },
+          modules: {
+            ...defaultAdminSettings.modules,
+            ...JSON.parse(storedSettings).modules,
+          },
+        }
+      : defaultAdminSettings
+  } catch {
+    return defaultAdminSettings
+  }
+}
+
+const writeAdminSettings = (settings) => {
+  window.localStorage.setItem(settingsStorageKey, JSON.stringify(settings))
+}
+
 // Traduit les evenements d'audit backend en libelles lisibles dans l'interface.
 const auditActionLabel = (action) =>
   ({
@@ -100,6 +173,14 @@ const auditActionLabel = (action) =>
     LOGOUT: 'Deconnexion',
     PASSWORD_CHANGED: 'Mot de passe modifie',
     PROFILE_UPDATED: 'Profil modifie',
+    USER_APPROVED: 'Inscription validee',
+    USER_DISABLED: 'Compte desactive',
+    USER_REACTIVATED: 'Compte reactive',
+    USER_PASSWORD_RESET: 'Mot de passe reinitialise',
+    ROLE_CHANGED: 'Role modifie',
+    COMPANY_UPDATED: 'Entreprise modifiee',
+    USER_REGISTERED: 'Inscription demandee',
+    SETUP_COMPLETED: 'Configuration initiale',
   })[action] ?? action
 
 // Controle les informations demandees lors de l'inscription avant validation Admin.
@@ -368,6 +449,9 @@ function App() {
           onGmailAccess={() =>
             setAuthNotice('Google OAuth sera branche apres la configuration OAuth backend.')
           }
+          onPhoneAccess={() =>
+            setAuthNotice('La connexion par telephone sera branchee avec le service SMS/OTP backend.')
+          }
           onModeChange={(mode) => {
             setAuthMode(mode)
             setAuthNotice('')
@@ -569,6 +653,7 @@ function AuthPage({
   isBusy,
   notice,
   onGmailAccess,
+  onPhoneAccess,
   onModeChange,
   onRegisterSubmit,
   onSubmit,
@@ -675,13 +760,16 @@ function AuthPage({
 
         {(notice || resetNotice) && <p className="auth-notice">{notice || resetNotice}</p>}
 
-        <p className="auth-lead">Sign in with:</p>
-        <div className="social-row" aria-label="Connexion sociale">
+        <p className="auth-lead">{authMode === 'register' ? 'Sign up with:' : 'Sign in with:'}</p>
+        <div
+          className="social-row"
+          aria-label={authMode === 'register' ? 'Inscription sociale' : 'Connexion sociale'}
+        >
           <button type="button" onClick={onGmailAccess} aria-label="Gmail">
             G
           </button>
-          <button type="button" aria-label="Contact">
-            @
+          <button type="button" onClick={onPhoneAccess} aria-label="Telephone">
+            <Smartphone size={17} strokeWidth={2.4} aria-hidden="true" />
           </button>
         </div>
         <p className="auth-separator">or:</p>
@@ -2192,6 +2280,13 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
   const [sessions, setSessions] = useState([])
   const [loginHistory, setLoginHistory] = useState([])
   const [isSecurityLoading, setIsSecurityLoading] = useState(false)
+  const [users, setUsers] = useState([])
+  const [activityLog, setActivityLog] = useState([])
+  const [selectedUserHistory, setSelectedUserHistory] = useState([])
+  const [selectedHistoryUser, setSelectedHistoryUser] = useState(null)
+  const [userPasswordDeliveryInfo, setUserPasswordDeliveryInfo] = useState(null)
+  const [adminSettings, setAdminSettings] = useState(() => readAdminSettings())
+  const [isAdminDataLoading, setIsAdminDataLoading] = useState(false)
   const isAdmin = user.roleValues.includes('ADMIN')
 
   useEffect(() => {
@@ -2255,6 +2350,43 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
     }
   }, [activeTab, company, isAdmin])
 
+  useEffect(() => {
+    if (!isAdmin || !['users', 'activity'].includes(activeTab)) {
+      return undefined
+    }
+
+    let isMounted = true
+
+    const loader = activeTab === 'users' ? api.getUsers() : api.getActivityLog()
+
+    loader
+      .then((result) => {
+        if (!isMounted) {
+          return
+        }
+
+        if (activeTab === 'users') {
+          setUsers(result)
+        } else {
+          setActivityLog(result)
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice({ type: 'error', text: error.message })
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsAdminDataLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [activeTab, isAdmin])
+
   const showNotice = (type, text) => {
     setNotice({ type, text })
   }
@@ -2273,6 +2405,186 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
 
     if (tab === 'company') {
       setCompanyError('')
+    }
+
+    if (tab === 'users' || tab === 'activity') {
+      setIsAdminDataLoading(true)
+    }
+  }
+
+  const persistAdminSettings = (nextSettings, message) => {
+    setAdminSettings(nextSettings)
+    writeAdminSettings(nextSettings)
+    showNotice('success', message)
+    onAdminEvent?.(message)
+  }
+
+  const updateDisplayPreference = (field, value) => {
+    persistAdminSettings(
+      {
+        ...adminSettings,
+        display: {
+          ...adminSettings.display,
+          [field]: value,
+        },
+      },
+      'Preferences d affichage mises a jour',
+    )
+  }
+
+  const toggleDisplayWidget = (widget) => {
+    persistAdminSettings(
+      {
+        ...adminSettings,
+        display: {
+          ...adminSettings.display,
+          widgets: {
+            ...adminSettings.display.widgets,
+            [widget]: !adminSettings.display.widgets[widget],
+          },
+        },
+      },
+      'Widgets du dashboard mis a jour',
+    )
+  }
+
+  const toggleNotificationPreference = (field) => {
+    persistAdminSettings(
+      {
+        ...adminSettings,
+        notifications: {
+          ...adminSettings.notifications,
+          [field]: !adminSettings.notifications[field],
+        },
+      },
+      'Notifications mises a jour',
+    )
+  }
+
+  const updateReminderFrequency = (value) => {
+    persistAdminSettings(
+      {
+        ...adminSettings,
+        notifications: {
+          ...adminSettings.notifications,
+          reminderFrequency: value,
+        },
+      },
+      'Frequence des rappels mise a jour',
+    )
+  }
+
+  const toggleModule = (moduleKey) => {
+    persistAdminSettings(
+      {
+        ...adminSettings,
+        modules: {
+          ...adminSettings.modules,
+          [moduleKey]: !adminSettings.modules[moduleKey],
+        },
+      },
+      'Modules actives mis a jour',
+    )
+  }
+
+  const refreshUsers = async () => {
+    setIsAdminDataLoading(true)
+
+    try {
+      setUsers(await api.getUsers())
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setIsAdminDataLoading(false)
+    }
+  }
+
+  const refreshActivity = async () => {
+    setIsAdminDataLoading(true)
+
+    try {
+      setActivityLog(await api.getActivityLog())
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setIsAdminDataLoading(false)
+    }
+  }
+
+  const updateManagedUser = (updatedUser) => {
+    setUsers((current) => current.map((item) => (item.id === updatedUser.id ? updatedUser : item)))
+  }
+
+  const changeManagedUserRole = async (managedUser, role) => {
+    setSavingTarget(`role-${managedUser.id}`)
+    showNotice('', '')
+
+    try {
+      const updatedUser = await api.updateUserRole(managedUser.id, { role })
+      updateManagedUser(updatedUser)
+      showNotice('success', `Role modifie pour ${managedUser.email}.`)
+      onAdminEvent?.('Role utilisateur modifie')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
+  const toggleManagedUserStatus = async (managedUser) => {
+    setSavingTarget(`status-${managedUser.id}`)
+    showNotice('', '')
+
+    try {
+      const updatedUser =
+        managedUser.status === 'DISABLED'
+          ? await api.reactivateUser(managedUser.id)
+          : await api.disableUser(managedUser.id)
+
+      updateManagedUser(updatedUser)
+      showNotice('success', `Statut mis a jour pour ${managedUser.email}.`)
+      onAdminEvent?.('Statut utilisateur modifie')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
+  const resetManagedUserPassword = async (managedUser) => {
+    setSavingTarget(`reset-${managedUser.id}`)
+    showNotice('', '')
+
+    try {
+      const result = await api.resetUserPassword(managedUser.id)
+      updateManagedUser(result.user)
+      setUserPasswordDeliveryInfo({
+        email: result.user.email,
+        fullName: `${result.user.lastName ?? ''} ${result.user.firstName ?? ''}`.trim(),
+        password: result.temporaryPassword,
+        phone: result.user.phone,
+        role: result.user.roles?.[0]?.label ?? 'Utilisateur',
+      })
+      showNotice('success', `Mot de passe temporaire genere pour ${managedUser.email}.`)
+      onAdminEvent?.('Mot de passe utilisateur reinitialise')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
+  const viewManagedUserHistory = async (managedUser) => {
+    setSavingTarget(`history-${managedUser.id}`)
+    showNotice('', '')
+
+    try {
+      setSelectedHistoryUser(managedUser)
+      setSelectedUserHistory(await api.getUserHistory(managedUser.id))
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
     }
   }
 
@@ -2440,6 +2752,47 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
             onClick={() => selectSettingsTab('company')}
           >
             Parametres entreprise
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            className={activeTab === 'users' ? 'active' : ''}
+            onClick={() => selectSettingsTab('users')}
+          >
+            Utilisateurs
+          </button>
+        )}
+        <button
+          type="button"
+          className={activeTab === 'display' ? 'active' : ''}
+          onClick={() => selectSettingsTab('display')}
+        >
+          Affichage
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'notifications' ? 'active' : ''}
+          onClick={() => selectSettingsTab('notifications')}
+        >
+          Notifications
+        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            className={activeTab === 'modules' ? 'active' : ''}
+            onClick={() => selectSettingsTab('modules')}
+          >
+            Modules
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            className={activeTab === 'activity' ? 'active' : ''}
+            onClick={() => selectSettingsTab('activity')}
+          >
+            Journal
           </button>
         )}
       </div>
@@ -2709,7 +3062,383 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
           )}
         </form>
       )}
+
+      {activeTab === 'users' && isAdmin && (
+        <AdminUsersSettings
+          isLoading={isAdminDataLoading}
+          onChangeRole={changeManagedUserRole}
+          onRefresh={refreshUsers}
+          onResetPassword={resetManagedUserPassword}
+          onToggleStatus={toggleManagedUserStatus}
+          onViewHistory={viewManagedUserHistory}
+          savingTarget={savingTarget}
+          selectedHistoryUser={selectedHistoryUser}
+          userHistory={selectedUserHistory}
+          users={users}
+        />
+      )}
+
+      {activeTab === 'display' && (
+        <DisplayPreferencesSettings
+          preferences={adminSettings.display}
+          onChange={updateDisplayPreference}
+          onToggleWidget={toggleDisplayWidget}
+        />
+      )}
+
+      {activeTab === 'notifications' && (
+        <NotificationSettings
+          notifications={adminSettings.notifications}
+          onChangeFrequency={updateReminderFrequency}
+          onToggle={toggleNotificationPreference}
+        />
+      )}
+
+      {activeTab === 'modules' && isAdmin && (
+        <ModuleSettings modules={adminSettings.modules} onToggle={toggleModule} />
+      )}
+
+      {activeTab === 'activity' && isAdmin && (
+        <ActivityLogSettings
+          activityLog={activityLog}
+          isLoading={isAdminDataLoading}
+          onRefresh={refreshActivity}
+        />
+      )}
+
+      {userPasswordDeliveryInfo && (
+        <PasswordDeliveryPanel
+          info={userPasswordDeliveryInfo}
+          onClose={() => setUserPasswordDeliveryInfo(null)}
+        />
+      )}
     </section>
+  )
+}
+
+function getUserDisplayName(managedUser) {
+  return `${managedUser.lastName ?? ''} ${managedUser.firstName ?? ''}`.trim() || managedUser.email
+}
+
+function userStatusLabel(status) {
+  return (
+    {
+      PENDING: 'En attente',
+      ACTIVE: 'Actif',
+      DISABLED: 'Desactive',
+      FORCE_PASSWORD_CHANGE: 'Mot de passe a changer',
+    }[status] ?? status
+  )
+}
+
+function AdminUsersSettings({
+  isLoading,
+  onChangeRole,
+  onRefresh,
+  onResetPassword,
+  onToggleStatus,
+  onViewHistory,
+  savingTarget,
+  selectedHistoryUser,
+  userHistory,
+  users,
+}) {
+  const pendingCount = users.filter((item) => item.status === 'PENDING').length
+
+  return (
+    <div className="settings-card">
+      {/* Gestion reservee Admin : comptes, roles, statuts, reset et historique utilisateur. */}
+      <div className="settings-panel-heading">
+        <div>
+          <p className="eyebrow">Gestion des utilisateurs</p>
+          <h2>Comptes et droits.</h2>
+          <p>{pendingCount} utilisateur(s) en attente de validation.</p>
+        </div>
+        <button type="button" className="secondary-button bordered" onClick={onRefresh}>
+          Actualiser
+        </button>
+      </div>
+
+      {isLoading ? (
+        <p className="approval-empty">Chargement des utilisateurs...</p>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Utilisateur</th>
+                <th>Statut</th>
+                <th>Role</th>
+                <th>Derniere connexion</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((managedUser) => (
+                <tr key={managedUser.id}>
+                  <td>
+                    <strong>{getUserDisplayName(managedUser)}</strong>
+                    <span>{managedUser.email}</span>
+                  </td>
+                  <td>
+                    <span className={`status-pill ${managedUser.status.toLowerCase()}`}>
+                      {userStatusLabel(managedUser.status)}
+                    </span>
+                  </td>
+                  <td>
+                    <select
+                      aria-label="Modifier le role"
+                      value={managedUser.roles?.[0]?.name ?? 'AUTRE'}
+                      disabled={savingTarget === `role-${managedUser.id}`}
+                      onChange={(event) => onChangeRole(managedUser, event.target.value)}
+                    >
+                      {availableRoles.map((role) => (
+                        <option key={role.value} value={role.value}>
+                          {role.label}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    {managedUser.lastLoginAt
+                      ? formatDateTime(new Date(managedUser.lastLoginAt))
+                      : 'Jamais'}
+                  </td>
+                  <td>
+                    <div className="table-actions">
+                      <button
+                        type="button"
+                        className="secondary-button bordered"
+                        disabled={savingTarget === `history-${managedUser.id}`}
+                        onClick={() => onViewHistory(managedUser)}
+                      >
+                        Historique
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button bordered"
+                        disabled={savingTarget === `reset-${managedUser.id}`}
+                        onClick={() => onResetPassword(managedUser)}
+                      >
+                        Reset
+                      </button>
+                      <button
+                        type="button"
+                        className={managedUser.status === 'DISABLED' ? 'primary-button' : 'danger-button'}
+                        disabled={savingTarget === `status-${managedUser.id}`}
+                        onClick={() => onToggleStatus(managedUser)}
+                      >
+                        {managedUser.status === 'DISABLED' ? 'Reactiver' : 'Desactiver'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {selectedHistoryUser && (
+        <article className="settings-muted-panel">
+          <p className="eyebrow">Historique utilisateur</p>
+          <h3>{getUserDisplayName(selectedHistoryUser)}</h3>
+          <ul className="activity-list">
+            {userHistory.map((event) => (
+              <li key={event.id}>
+                <span>{formatDateTime(new Date(event.createdAt))}</span>
+                <strong>{auditActionLabel(event.action)}</strong>
+              </li>
+            ))}
+            {userHistory.length === 0 && <li>Aucun historique disponible.</li>}
+          </ul>
+        </article>
+      )}
+    </div>
+  )
+}
+
+function DisplayPreferencesSettings({ onChange, onToggleWidget, preferences }) {
+  const widgetLabels = {
+    budget: 'Budget',
+    events: 'Evenements',
+    alerts: 'Alertes',
+    team: 'Equipe',
+    finance: 'Finance',
+  }
+
+  return (
+    <div className="settings-card">
+      <div className="settings-panel-heading">
+        <div>
+          <p className="eyebrow">Preferences d'affichage</p>
+          <h2>Adapter le dashboard.</h2>
+        </div>
+        <MonitorCog size={34} aria-hidden="true" />
+      </div>
+      <div className="form-grid">
+        <label>
+          Theme
+          <select value={preferences.theme} onChange={(event) => onChange('theme', event.target.value)}>
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+          </select>
+        </label>
+        <label>
+          Langue
+          <select value={preferences.language} onChange={(event) => onChange('language', event.target.value)}>
+            <option value="fr">Francais</option>
+            <option value="en">Anglais</option>
+          </select>
+        </label>
+        <label>
+          Format de date
+          <select value={preferences.dateFormat} onChange={(event) => onChange('dateFormat', event.target.value)}>
+            <option value="full">Complet</option>
+            <option value="short">Court</option>
+            <option value="numeric">Numerique</option>
+          </select>
+        </label>
+        <label>
+          Fuseau horaire
+          <select value={preferences.timezone} onChange={(event) => onChange('timezone', event.target.value)}>
+            <option value="Africa/Abidjan">Africa/Abidjan</option>
+            <option value="Europe/Paris">Europe/Paris</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </label>
+        <label>
+          Densite dashboard
+          <select value={preferences.density} onChange={(event) => onChange('density', event.target.value)}>
+            <option value="comfortable">Confortable</option>
+            <option value="compact">Compacte</option>
+            <option value="spacious">Aeree</option>
+          </select>
+        </label>
+      </div>
+      <div className="settings-section-grid">
+        {Object.entries(preferences.widgets).map(([widget, enabled]) => (
+          <label className="settings-toggle" key={widget}>
+            <input type="checkbox" checked={enabled} onChange={() => onToggleWidget(widget)} />
+            Afficher {widgetLabels[widget]}
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function NotificationSettings({ notifications, onChangeFrequency, onToggle }) {
+  const items = [
+    ['registration', "Notifications d'inscription"],
+    ['budget', 'Notifications budget'],
+    ['event', 'Notifications evenement'],
+    ['email', 'Notifications email'],
+    ['inApp', "Notifications dans l'application"],
+  ]
+
+  return (
+    <div className="settings-card">
+      <div className="settings-panel-heading">
+        <div>
+          <p className="eyebrow">Notifications</p>
+          <h2>Regles d'alerte.</h2>
+        </div>
+        <Bell size={34} aria-hidden="true" />
+      </div>
+      <div className="settings-section-grid">
+        {items.map(([key, label]) => (
+          <label className="settings-toggle" key={key}>
+            <input type="checkbox" checked={notifications[key]} onChange={() => onToggle(key)} />
+            {label}
+          </label>
+        ))}
+      </div>
+      <label>
+        Frequence des rappels
+        <select
+          value={notifications.reminderFrequency}
+          onChange={(event) => onChangeFrequency(event.target.value)}
+        >
+          <option value="realtime">Temps reel</option>
+          <option value="daily">Quotidienne</option>
+          <option value="weekly">Hebdomadaire</option>
+          <option value="manual">Manuelle</option>
+        </select>
+      </label>
+    </div>
+  )
+}
+
+function ModuleSettings({ modules, onToggle }) {
+  const items = [
+    ['events', 'Evenements'],
+    ['finances', 'Finances'],
+    ['rh', 'RH'],
+    ['commercial', 'Commercial'],
+    ['documents', 'Documents'],
+    ['prestations', 'Prestations'],
+    ['reports', 'Rapports'],
+  ]
+
+  return (
+    <div className="settings-card">
+      <div className="settings-panel-heading">
+        <div>
+          <p className="eyebrow">Modules actives</p>
+          <h2>Preparer l'evolution.</h2>
+          <p>Ces interrupteurs preparent l'activation progressive des modules metier.</p>
+        </div>
+        <Layers size={34} aria-hidden="true" />
+      </div>
+      <div className="module-toggle-grid">
+        {items.map(([key, label]) => (
+          <button
+            type="button"
+            className={`module-toggle ${modules[key] ? 'active' : ''}`}
+            key={key}
+            onClick={() => onToggle(key)}
+          >
+            <span>{label}</span>
+            <strong>{modules[key] ? 'Actif' : 'Inactif'}</strong>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ActivityLogSettings({ activityLog, isLoading, onRefresh }) {
+  return (
+    <div className="settings-card">
+      <div className="settings-panel-heading">
+        <div>
+          <p className="eyebrow">Journal d'activite</p>
+          <h2>Actions sensibles.</h2>
+        </div>
+        <button type="button" className="secondary-button bordered" onClick={onRefresh}>
+          Actualiser
+        </button>
+      </div>
+      {isLoading ? (
+        <p className="approval-empty">Chargement du journal...</p>
+      ) : (
+        <ul className="activity-list detailed">
+          {activityLog.map((event) => (
+            <li key={event.id}>
+              <History size={18} aria-hidden="true" />
+              <div>
+                <strong>{auditActionLabel(event.action)}</strong>
+                <span>
+                  {event.user?.email ?? 'Systeme'} - {formatDateTime(new Date(event.createdAt))}
+                </span>
+              </div>
+            </li>
+          ))}
+          {activityLog.length === 0 && <li>Aucune activite disponible.</li>}
+        </ul>
+      )}
+    </div>
   )
 }
 

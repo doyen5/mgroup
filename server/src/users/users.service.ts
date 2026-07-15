@@ -6,6 +6,7 @@ import { PasswordService } from '../common/security/password.service';
 import { AuthenticatedUser } from '../common/types/authenticated-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveUserDto } from './dto/approve-user.dto';
+import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 
@@ -20,6 +21,15 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: { status: UserStatus.PENDING },
       orderBy: { createdAt: 'desc' },
+    });
+
+    return users.map((user) => this.toPublicUser(user));
+  }
+
+  async list() {
+    const users = await this.prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: { roles: { include: { role: true } } },
     });
 
     return users.map((user) => this.toPublicUser(user));
@@ -130,6 +140,113 @@ export class UsersService {
     return this.toPublicUser(user);
   }
 
+  async reactivate(userId: string, admin: AuthenticatedUser) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { status: UserStatus.ACTIVE },
+      include: { roles: { include: { role: true } } },
+    });
+
+    await this.prisma.loginAuditLog.create({
+      data: {
+        userId: admin.sub,
+        action: AuditAction.USER_REACTIVATED,
+        metadata: { reactivatedUserId: userId },
+      },
+    });
+
+    return this.toPublicUser(user);
+  }
+
+  async resetPassword(userId: string, dto: ResetUserPasswordDto, admin: AuthenticatedUser) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+
+    const temporaryPassword = dto.temporaryPassword ?? this.generateTemporaryPassword();
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.refreshToken.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+        },
+        data: { revokedAt: new Date() },
+      });
+
+      return tx.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: await this.passwords.hash(temporaryPassword),
+          status: UserStatus.FORCE_PASSWORD_CHANGE,
+        },
+        include: { roles: { include: { role: true } } },
+      });
+    });
+
+    await this.prisma.loginAuditLog.create({
+      data: {
+        userId: admin.sub,
+        action: AuditAction.USER_PASSWORD_RESET,
+        metadata: { resetUserId: userId },
+      },
+    });
+
+    return {
+      message: 'Temporary password generated. Communicate it securely.',
+      temporaryPassword,
+      user: this.toPublicUser(updated),
+    };
+  }
+
+  async history(userId: string) {
+    await this.ensureUserExists(userId);
+
+    return this.prisma.loginAuditLog.findMany({
+      where: {
+        OR: [
+          { userId },
+          { metadata: { path: ['approvedUserId'], equals: userId } },
+          { metadata: { path: ['changedUserId'], equals: userId } },
+          { metadata: { path: ['disabledUserId'], equals: userId } },
+          { metadata: { path: ['reactivatedUserId'], equals: userId } },
+          { metadata: { path: ['resetUserId'], equals: userId } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
+
+  async activity() {
+    return this.prisma.loginAuditLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 80,
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
+
   async me(user: AuthenticatedUser) {
     const dbUser = await this.prisma.user.findUnique({
       where: { id: user.sub },
@@ -193,6 +310,14 @@ export class UsersService {
 
   private generateTemporaryPassword() {
     return `MGroup-${randomBytes(6).toString('base64url')}`;
+  }
+
+  private async ensureUserExists(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
   }
 
   private clean(value?: string) {

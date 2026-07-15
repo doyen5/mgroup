@@ -176,17 +176,17 @@ Si le setup est deja fait, l'application affiche directement la page d'accueil.
 POST /api/setup/company-admin
 ```
 
-4. Le backend cree :
+1. Le backend cree :
    - l'entreprise ;
    - les roles par defaut ;
    - le premier utilisateur Admin ;
    - le hash du mot de passe ;
    - le statut `FORCE_PASSWORD_CHANGE`.
 
-5. L'administrateur choisit Dashboard ou Page d'accueil.
-6. Pour aller au dashboard, il doit se reconnecter.
-7. Apres connexion, le backend force le changement de mot de passe.
-8. Apres changement, l'admin accede au dashboard.
+2. L'administrateur choisit Dashboard ou Page d'accueil.
+3. Pour aller au dashboard, il doit se reconnecter.
+4. Apres connexion, le backend force le changement de mot de passe.
+5. Apres changement, l'admin accede au dashboard.
 
 Routes utilisees :
 
@@ -196,6 +196,23 @@ POST /api/auth/login
 POST /api/auth/change-password
 GET  /api/users/me
 ```
+
+## Connexion et inscription sociale
+
+La page d'authentification affiche deux modes :
+
+- `LOGIN` affiche le libelle `Sign in with:` ;
+- `REGISTER` affiche le libelle `Sign up with:`.
+
+Les boutons sociaux proposes sont :
+
+- Gmail ;
+- Telephone.
+
+Pour le moment, ces boutons affichent une notification prototype. Le branchement reel demandera :
+
+- Google OAuth cote backend pour Gmail ;
+- un service SMS/OTP cote backend pour la connexion ou l'inscription par telephone.
 
 ## Parcours Autre utilisateur
 
@@ -214,13 +231,13 @@ GET  /api/users/me
 POST /api/auth/register
 ```
 
-4. Le backend cree l'utilisateur avec le statut :
+1. Le backend cree l'utilisateur avec le statut :
 
 ```txt
 PENDING
 ```
 
-5. L'utilisateur attend la validation de l'admin.
+1. L'utilisateur attend la validation de l'admin.
 
 ## Validation admin
 
@@ -271,7 +288,7 @@ Le dashboard Admin contient maintenant :
 - des pages internes accessibles depuis le menu : Inscriptions, Evenements, Finance, Equipe, Budget, Alertes et Parametres ;
 - des alertes sonores cote navigateur pour prevenir l'Admin lors des changements importants ;
 - la validation des inscriptions en attente depuis PostgreSQL.
-- une section `Parametres` complete pour le profil, la securite et l'entreprise.
+- une section `Parametres` complete pour le profil, la securite, l'entreprise, les utilisateurs, les preferences, les notifications, les modules et le journal d'activite.
 
 La page `Alertes` permet d'activer/desactiver le son et de tester une notification. Le son est genere dans le navigateur avec Web Audio API, sans fichier audio externe.
 
@@ -333,6 +350,67 @@ PATCH /api/setup/company
 
 Chaque modification entreprise est auditee avec l'action `COMPANY_UPDATED`.
 
+Dans `Parametres > Utilisateurs`, seul l'Admin peut :
+
+- voir la liste complete des utilisateurs ;
+- voir les utilisateurs en attente ;
+- modifier un role ;
+- desactiver ou reactiver un compte ;
+- reinitialiser le mot de passe temporaire d'un utilisateur ;
+- voir l'historique d'un utilisateur.
+
+Routes utilisees :
+
+```txt
+GET   /api/users
+GET   /api/users/pending
+PATCH /api/users/:id/role
+PATCH /api/users/:id/disable
+PATCH /api/users/:id/reactivate
+POST  /api/users/:id/reset-password
+GET   /api/users/:id/history
+```
+
+Dans `Parametres > Affichage`, l'utilisateur peut regler :
+
+- theme clair/sombre ;
+- langue francais/anglais ;
+- format de date ;
+- fuseau horaire ;
+- densite du dashboard ;
+- affichage/masquage des widgets.
+
+Dans `Parametres > Notifications`, l'utilisateur peut regler :
+
+- notifications d'inscription ;
+- notifications budget ;
+- notifications evenement ;
+- notifications email ;
+- notifications dans l'application ;
+- frequence des rappels.
+
+Dans `Parametres > Modules`, l'Admin peut preparer l'activation/desactivation de :
+
+- Evenements ;
+- Finances ;
+- RH ;
+- Commercial ;
+- Documents ;
+- Prestations ;
+- Rapports.
+
+Dans `Parametres > Journal`, l'Admin voit les actions sensibles :
+
+- connexions ;
+- validations d'inscriptions ;
+- changement de role ;
+- modification de profil ;
+- modification entreprise ;
+- reset mot de passe ;
+- desactivation/reactivation de compte.
+
+Les preferences, notifications et modules sont stockes en `localStorage` pour le prototype. En production, il faudra ajouter des tables Prisma dediees.
+
 ## Remember me et mot de passe oublie
 
 `Remember me` fonctionne ainsi :
@@ -384,10 +462,15 @@ Users :
 ```txt
 GET   /api/users/me
 PATCH /api/users/me
+GET   /api/users
 GET   /api/users/pending
+GET   /api/users/activity
+GET   /api/users/:id/history
 PATCH /api/users/:id/approve
 PATCH /api/users/:id/role
 PATCH /api/users/:id/disable
+PATCH /api/users/:id/reactivate
+POST  /api/users/:id/reset-password
 ```
 
 ## Modele de donnees Prisma
@@ -411,6 +494,8 @@ PASSWORD_CHANGED
 USER_REGISTERED
 USER_APPROVED
 USER_DISABLED
+USER_REACTIVATED
+USER_PASSWORD_RESET
 ROLE_CHANGED
 PROFILE_UPDATED
 COMPANY_UPDATED
@@ -529,6 +614,9 @@ Tests HTTP utiles pour verification locale :
 GET http://127.0.0.1:4000/api/setup/status
 POST http://127.0.0.1:4000/api/auth/forgot-password
 PATCH http://127.0.0.1:4000/api/users/me
+GET http://127.0.0.1:4000/api/users
+GET http://127.0.0.1:4000/api/users/activity
+GET http://127.0.0.1:4000/api/users/:id/history
 GET http://127.0.0.1:4000/api/auth/sessions
 GET http://127.0.0.1:4000/api/auth/login-history
 GET http://127.0.0.1:4000/api/setup/company

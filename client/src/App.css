@@ -255,6 +255,9 @@
 }
 
 .social-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   height: 34px;
   border: 0;
@@ -1280,7 +1283,7 @@ button:disabled,
 
 .settings-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
   margin: 0 0 18px;
   padding: 6px;
@@ -1351,6 +1354,158 @@ button:disabled,
 
 .settings-actions.left {
   justify-content: flex-start;
+}
+
+.settings-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settings-panel-heading h2,
+.settings-panel-heading p {
+  margin: 0;
+}
+
+.settings-panel-heading h2 {
+  color: #10233f;
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #d8edf9;
+  text-align: left;
+  vertical-align: top;
+}
+
+.admin-table th {
+  color: #58708f;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.admin-table td strong,
+.admin-table td span {
+  display: block;
+}
+
+.admin-table td span {
+  color: #58708f;
+}
+
+.admin-table select {
+  min-width: 150px;
+}
+
+.status-pill {
+  width: max-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.status-pill.active {
+  color: #0f766e;
+  background: #dff8f4;
+}
+
+.status-pill.pending,
+.status-pill.force_password_change {
+  color: #9a5b00;
+  background: #fff0d8;
+}
+
+.status-pill.disabled {
+  color: #c53b21;
+  background: #fff1ed;
+}
+
+.table-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.table-actions button {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.module-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.module-toggle {
+  display: grid;
+  gap: 8px;
+  min-height: 92px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+  padding: 16px;
+  color: #10233f;
+  background: #f7fbff;
+  text-align: left;
+}
+
+.module-toggle.active {
+  border-color: #9fd8f5;
+  background: linear-gradient(135deg, #e0f3ff, #ffffff);
+}
+
+.module-toggle strong {
+  color: #159bd3;
+}
+
+.activity-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.activity-list.detailed li {
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.activity-list svg {
+  color: #159bd3;
+  flex: 0 0 auto;
+}
+
+.activity-list strong {
+  color: #10233f;
+}
+
+.activity-list span {
+  color: #58708f;
 }
 
 .settings-meta-grid,

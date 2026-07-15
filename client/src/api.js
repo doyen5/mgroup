@@ -118,8 +118,16 @@ export const api = {
       body: payload,
     }),
   getPendingUsers: () => request('/users/pending'),
+  getUsers: () => request('/users'),
+  getActivityLog: () => request('/users/activity'),
+  getUserHistory: (userId) => request(`/users/${userId}/history`),
   approveUser: (userId, payload) =>
     request(`/users/${userId}/approve`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  updateUserRole: (userId, payload) =>
+    request(`/users/${userId}/role`, {
       method: 'PATCH',
       body: payload,
     }),
@@ -127,5 +135,15 @@ export const api = {
     request(`/users/${userId}/disable`, {
       method: 'PATCH',
       body: {},
+    }),
+  reactivateUser: (userId) =>
+    request(`/users/${userId}/reactivate`, {
+      method: 'PATCH',
+      body: {},
+    }),
+  resetUserPassword: (userId, payload = {}) =>
+    request(`/users/${userId}/reset-password`, {
+      method: 'POST',
+      body: payload,
     }),
 }
