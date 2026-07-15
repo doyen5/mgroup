@@ -1,4 +1,10 @@
 {
+  "scripts": {
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "server:dev": "npm --prefix server run start:dev",
+    "server:build": "npm --prefix server run build"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.2",
     "autoprefixer": "^10.5.2",

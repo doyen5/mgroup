@@ -1,49 +1,58 @@
 # M Group App - Gestion evenementielle
 
-Application web de gestion pour M Group, structure evenementielle liee a l'artiste Molare. Le projet sert actuellement de prototype frontend en mode test, avec un parcours complet simule pour l'administrateur, les utilisateurs, la connexion, l'inscription, la deconnexion et le dashboard.
+Application web de gestion pour M Group, structure evenementielle liee a l'artiste Molare.
 
-## Objectif
+Le projet contient maintenant :
 
-L'application doit permettre a M Group de gerer ses activites evenementielles avec des espaces adaptes aux roles :
+- un frontend React/Vite connecte au backend ;
+- un backend NestJS/Prisma ;
+- une base PostgreSQL lancee avec Docker ;
+- une authentification avec mots de passe hashes, JWT et refresh tokens ;
+- une gestion des roles Admin, Secretaire, Comptable, RH et Commercial.
 
-- Admin
-- Secretaire
-- Comptable
-- RH
-- Commercial
+## Objectif metier
 
-Le role ne doit jamais etre choisi directement par l'utilisateur. Un utilisateur fait une demande d'inscription, puis l'administrateur valide le compte, attribue le role et communique le mot de passe ou l'invitation de connexion.
+L'application sert a gerer les acces et les workflows internes de M Group.
 
-## Stack actuelle
+Regle principale : un utilisateur ne choisit jamais son role lui-meme. Il fait une demande d'inscription, puis l'administrateur valide le compte, attribue le role et communique le mot de passe temporaire.
+
+## Stack technique
 
 Frontend :
 
 - React
 - Vite
 - CSS personnalise
-- Assets locaux dans `client/src/assets` et `client/public`
-
-Commandes disponibles dans `client/package.json` :
-
-```bash
-npm run dev
-npm run build
-npm run lint
-npm run preview
-```
+- `fetch` avec cookies `HttpOnly`
+- fichier API centralise : `client/src/api.js`
 
 Backend :
 
-- Le dossier `server/` existe mais n'est pas encore implemente.
-- La logique actuelle est simulee cote frontend pour valider les ecrans et les parcours.
+- NestJS
+- TypeScript
+- Prisma
+- PostgreSQL
+- bcrypt pour le hash des mots de passe
+- JWT access token
+- refresh token stocke en base sous forme hashee
+- validation DTO avec `class-validator`
+- guards par role
+- audit des connexions et actions sensibles
 
-## Structure actuelle
+Infrastructure locale :
+
+- Docker Desktop
+- `docker-compose.yml` pour PostgreSQL
+
+## Structure du projet
 
 ```txt
 mgroup-app/
 |-- README.md
 |-- package.json
+|-- docker-compose.yml
 |-- client/
+|   |-- .env.example
 |   |-- index.html
 |   |-- package.json
 |   |-- public/
@@ -51,6 +60,7 @@ mgroup-app/
 |   |   |-- icons.svg
 |   |   `-- mgroup-logo.svg
 |   `-- src/
+|       |-- api.js
 |       |-- App.jsx
 |       |-- App.css
 |       |-- index.css
@@ -58,229 +68,293 @@ mgroup-app/
 |       `-- assets/
 |           `-- mgroup-event-hero.jpg
 `-- server/
+    |-- .env.example
+    |-- package.json
+    |-- package-lock.json
+    |-- prisma/
+    |   |-- schema.prisma
+    |   `-- migrations/
+    `-- src/
+        |-- main.ts
+        |-- app.module.ts
+        |-- auth/
+        |-- setup/
+        |-- users/
+        |-- prisma/
+        `-- common/
 ```
 
-## Lancer le projet
+## Lancement complet
 
-Depuis le dossier du client :
+Depuis la racine du projet :
 
 ```powershell
-cd D:\PROJETS\Dev\mgroup-app\client
-npm run dev
+cd D:\PROJETS\Dev\mgroup-app
 ```
 
-Puis ouvrir :
+Demarrer PostgreSQL :
+
+```powershell
+docker compose up -d postgres
+```
+
+Installer et configurer le backend :
+
+```powershell
+cd D:\PROJETS\Dev\mgroup-app\server
+npm install
+Copy-Item .env.example .env
+npm run prisma:migrate
+npm run start:dev
+```
+
+Demarrer le frontend dans un autre terminal :
+
+```powershell
+cd D:\PROJETS\Dev\mgroup-app
+npm run client:dev
+```
+
+Ouvrir :
 
 ```txt
 http://127.0.0.1:5173/
 ```
 
-Si le port `5173` est deja utilise, Vite affichera une autre URL, par exemple `http://127.0.0.1:5174/`.
+L'API est disponible sur :
 
-## Parcours actuel en mode test
+```txt
+http://127.0.0.1:4000/api
+```
 
-Au lancement de l'application, l'utilisateur n'arrive pas directement sur la page d'accueil. Il arrive d'abord sur une page de choix :
+## Variables d'environnement
 
-- `Administrateur`
-- `Autre utilisateur`
+Backend : `server/.env`
 
-Ce comportement est volontaire pour le mode test, tant que le backend et la base de donnees ne sont pas encore connectes.
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mgroup_app?schema=public"
+PORT=4000
+CLIENT_ORIGIN="http://127.0.0.1:5173"
+JWT_ACCESS_SECRET="change-this-access-secret"
+JWT_ACCESS_EXPIRES_IN="15m"
+REFRESH_TOKEN_DAYS=7
+REMEMBER_ME_DAYS=30
+BCRYPT_SALT_ROUNDS=12
+```
+
+Frontend : `client/.env`
+
+Le fichier est optionnel car `client/src/api.js` utilise deja `http://127.0.0.1:4000/api` par defaut.
+
+```env
+VITE_API_URL="http://127.0.0.1:4000/api"
+```
+
+## Fonctionnement connecte frontend/backend
+
+Au chargement de React, `App.jsx` appelle :
+
+```txt
+GET /api/setup/status
+```
+
+Si la base est vide, l'utilisateur arrive sur la page de choix :
+
+- Administrateur
+- Autre utilisateur
+
+Si le setup est deja fait, l'application affiche directement la page d'accueil.
 
 ## Parcours Administrateur
 
-Si l'utilisateur choisit `Administrateur`, il suit ce parcours :
+1. L'administrateur remplit les informations de l'entreprise.
+2. Il remplit ses propres informations.
+3. Le frontend envoie les donnees a :
 
-1. Renseignement des informations de l'entreprise :
-   - nom de l'entreprise ;
-   - raison sociale ;
-   - adresse ;
-   - email ;
-   - contact ;
-   - photo ou logo.
+```txt
+POST /api/setup/company-admin
+```
 
-2. Renseignement des informations du patron :
-   - nom ;
-   - prenom(s) ;
-   - adresse ;
-   - email ;
-   - contact ;
-   - mot de passe initial ;
-   - photo.
+4. Le backend cree :
+   - l'entreprise ;
+   - les roles par defaut ;
+   - le premier utilisateur Admin ;
+   - le hash du mot de passe ;
+   - le statut `FORCE_PASSWORD_CHANGE`.
 
-3. Apres enregistrement, l'application propose :
-   - acceder au dashboard ;
-   - acceder a la page d'accueil.
+5. L'administrateur choisit Dashboard ou Page d'accueil.
+6. Pour aller au dashboard, il doit se reconnecter.
+7. Apres connexion, le backend force le changement de mot de passe.
+8. Apres changement, l'admin accede au dashboard.
 
-4. Si l'administrateur choisit le dashboard :
-   - il est force a se connecter ;
-   - il doit modifier son mot de passe ;
-   - il accede ensuite au dashboard admin.
+Routes utilisees :
 
-Cette logique prepare le futur comportement backend : premier admin cree une seule fois, mot de passe hashé, statut `FORCE_PASSWORD_CHANGE`, puis acces au dashboard apres changement du mot de passe.
+```txt
+POST /api/setup/company-admin
+POST /api/auth/login
+POST /api/auth/change-password
+GET  /api/users/me
+```
 
 ## Parcours Autre utilisateur
 
-Si l'utilisateur choisit `Autre utilisateur`, il arrive sur le formulaire `REGISTER`.
+1. L'utilisateur ouvre `REGISTER`.
+2. Il renseigne :
+   - Nom ;
+   - Prenom(s) ;
+   - Adresse ;
+   - Contact ;
+   - Photo ;
+   - Email.
 
-L'inscription est en deux etapes :
+3. Le frontend envoie la demande a :
 
-1. Identite :
-   - Nom et Prenom(s) sur la meme ligne ;
-   - Adresse et Contact sur la meme ligne ;
-   - Photo.
+```txt
+POST /api/auth/register
+```
 
-2. Compte :
-   - Email ;
-   - message expliquant que le role sera choisi par l'administrateur.
+4. Le backend cree l'utilisateur avec le statut :
 
-L'utilisateur ne choisit pas son role. Apres soumission, il arrive sur une page d'attente de validation admin.
+```txt
+PENDING
+```
 
-## Page de connexion
+5. L'utilisateur attend la validation de l'admin.
 
-La page de connexion est une page pleine, stylisee et animee. Elle contient :
+## Validation admin
 
-- le logo circulaire de M Group en haut du formulaire ;
-- deux onglets : `LOGIN` et `REGISTER` ;
-- des icones de connexion sociale ;
-- un formulaire de connexion ;
-- l'option `Remember me` ;
-- un lien `Forgot password?` ;
-- un lien pour passer vers l'inscription.
+Quand l'admin arrive sur le dashboard, React charge les demandes en attente :
 
-Apres deconnexion, l'utilisateur est redirige vers cette page de connexion.
+```txt
+GET /api/users/pending
+```
+
+Pour valider un utilisateur, l'admin choisit un role et confirme :
+
+```txt
+PATCH /api/users/:id/approve
+```
+
+Le backend :
+
+- attribue le role choisi ;
+- genere un mot de passe temporaire si aucun n'est fourni ;
+- hash le mot de passe ;
+- passe l'utilisateur en `FORCE_PASSWORD_CHANGE` ;
+- renvoie le mot de passe temporaire a communiquer de maniere securisee.
 
 ## Dashboard Admin
 
-Le dashboard admin actuel est un prototype visuel. Il affiche :
+Le dashboard Admin contient maintenant :
 
-- le nom complet de l'utilisateur ;
-- son role ;
-- un avatar ;
-- un message de bienvenue ;
-- l'heure en temps reel ;
-- la date et l'heure de derniere connexion ;
-- une notification en bas a droite qui disparait apres 5 secondes ;
-- des cartes de statistiques ;
-- une zone de validation d'inscription ;
-- un select pour attribuer un role ;
-- un bouton de confirmation.
+- une barre laterale gauche sombre avec le menu principal ;
+- le logo M Group image dans la sidebar et dans l'en-tete ;
+- le libelle `Le Boss Molare` dans l'en-tete du dashboard ;
+- une zone profil avec nom complet, role, photo/avatar et derniere connexion ;
+- une horloge temps reel ;
+- des cartes statistiques colorees ;
+- des panneaux graphiques visuels ;
+- la validation des inscriptions en attente depuis PostgreSQL.
+- une section `Parametres` pour modifier le profil connecte.
 
-La deconnexion est protegee par une confirmation. Quand l'utilisateur clique sur `Deconnexion`, un modal demande s'il veut vraiment se deconnecter.
+Dans `Parametres`, l'utilisateur peut modifier :
 
-## Page d'accueil finale
+- sa photo de profil ;
+- son nom ;
+- son prenom ;
+- son adresse ;
+- son contact ;
+- son email.
 
-La page d'accueil est accessible apres le choix ou apres configuration admin. Elle contient :
+Le role reste non modifiable par l'utilisateur. Il est gere par l'administrateur.
 
-- un hero avec image evenementielle ;
-- le bouton `Lire la suite` ;
-- le bouton `Voir nos prestations` ;
-- une section `A Propos` avec image a gauche et texte a droite ;
-- une section `Nos prestations` avec cards animees, image et texte ;
-- une section sur l'acces securise ;
-- un footer avec fond colore.
-
-Footer :
+La sauvegarde appelle :
 
 ```txt
-Copyright © 2026 mgroup
-Désiré Kouamé AHOU CONCEPTION
+PATCH /api/users/me
 ```
 
-## Assets ajoutes
+Chaque modification du profil est enregistree dans `LoginAuditLog` avec l'action `PROFILE_UPDATED`.
 
-Logo :
+## Remember me et mot de passe oublie
+
+`Remember me` fonctionne ainsi :
+
+- le frontend memorise uniquement l'email dans `localStorage` ;
+- les tokens restent proteges dans des cookies `HttpOnly` ;
+- le backend allonge la duree du refresh token avec `REMEMBER_ME_DAYS` ;
+- le client API tente un `POST /api/auth/refresh` automatiquement si l'access token expire.
+
+`Forgot password?` fonctionne en mode local :
+
+1. L'utilisateur renseigne son email.
+2. Le backend cree un token dans `PasswordResetToken`.
+3. Comme aucun service email n'est encore branche, le token est renvoye a l'ecran en mode developpement.
+4. L'utilisateur saisit le token et son nouveau mot de passe.
+5. Le backend hash le nouveau mot de passe, marque le token comme utilise et revoque les refresh tokens existants.
+
+En production, le token ne devra plus etre affiche dans l'interface. Il devra etre envoye par email.
+
+## Routes backend principales
+
+Setup :
 
 ```txt
-client/public/mgroup-logo.svg
+GET  /api/setup/status
+POST /api/setup/company-admin
 ```
 
-Image hero :
+Auth :
 
 ```txt
-client/src/assets/mgroup-event-hero.jpg
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/forgot-password
+POST /api/auth/reset-password
+POST /api/auth/refresh
+POST /api/auth/logout
+POST /api/auth/change-password
+GET  /api/auth/me
 ```
 
-Le logo est utilise :
-
-- dans la page de choix initiale ;
-- en cercle au-dessus de la page de connexion.
-
-## Verifications effectuees
-
-Les commandes suivantes ont ete executees avec succes pendant le developpement :
-
-```powershell
-npm run lint
-npm run build
-```
-
-La page locale repond aussi en HTTP `200` sur :
+Users :
 
 ```txt
-http://127.0.0.1:5173/
+GET   /api/users/me
+PATCH /api/users/me
+GET   /api/users/pending
+PATCH /api/users/:id/approve
+PATCH /api/users/:id/role
+PATCH /api/users/:id/disable
 ```
 
-## Limites actuelles
+## Modele de donnees Prisma
 
-L'application n'a pas encore de vrai backend. Donc actuellement :
+Tables principales :
 
-- les connexions sont simulees ;
-- les inscriptions sont simulees ;
-- les roles sont affiches cote frontend ;
-- les mots de passe ne sont pas encore hashés ;
-- les tokens ne sont pas encore generes ;
-- les utilisateurs ne sont pas encore stockes en base de donnees ;
-- Gmail/OAuth n'est pas encore connecte.
+- `Company`
+- `User`
+- `Role`
+- `UserRole`
+- `RefreshToken`
+- `PasswordResetToken`
+- `LoginAuditLog`
 
-## Backend recommande
-
-Pour passer en production, il faut ajouter un backend avec :
-
-- NestJS + TypeScript ;
-- PostgreSQL ;
-- Prisma ;
-- hash de mot de passe avec Argon2id ou bcrypt ;
-- JWT access token ;
-- refresh token ;
-- cookies `HttpOnly`, `Secure`, `SameSite` ;
-- guards par role ;
-- validation des donnees ;
-- audit des connexions et actions admin.
-
-Routes principales a prevoir :
+Actions d'audit principales :
 
 ```txt
-POST /auth/login
-POST /auth/logout
-POST /auth/refresh
-POST /auth/change-password
-POST /auth/register
-POST /auth/google
-GET  /auth/me
-
-GET  /setup/status
-POST /setup/company-admin
-
-GET   /users/pending
-PATCH /users/:id/approve
-PATCH /users/:id/role
-PATCH /users/:id/disable
+LOGIN_SUCCESS
+LOGIN_FAILED
+PASSWORD_CHANGED
+USER_REGISTERED
+USER_APPROVED
+USER_DISABLED
+ROLE_CHANGED
+PROFILE_UPDATED
+SETUP_COMPLETED
 ```
 
-Tables principales a prevoir :
-
-```txt
-companies
-users
-roles
-permissions
-user_roles
-refresh_tokens
-password_reset_tokens
-login_audit_logs
-```
-
-Statuts utilisateur utiles :
+Statuts utilisateur :
 
 ```txt
 PENDING
@@ -289,15 +363,123 @@ DISABLED
 FORCE_PASSWORD_CHANGE
 ```
 
-## Prochaines etapes conseillees
+Roles :
 
-1. Creer le backend dans `server/`.
-2. Installer NestJS, Prisma et PostgreSQL.
-3. Modeliser les tables `companies`, `users`, `roles`, `refresh_tokens`.
-4. Brancher le setup admin sur une vraie route API.
-5. Brancher la connexion avec hash de mot de passe.
-6. Ajouter JWT + refresh token.
-7. Ajouter la validation d'inscription admin.
-8. Afficher un dashboard different selon le role.
-9. Ajouter Google OAuth/Gmail.
-10. Ajouter CI/CD avec lint, build, tests et migrations.
+```txt
+ADMIN
+SECRETAIRE
+COMPTABLE
+RH
+COMMERCIAL
+```
+
+## Securite actuelle
+
+Deja en place :
+
+- mots de passe hashes avec bcrypt ;
+- access token JWT ;
+- refresh token aleatoire hashe en base ;
+- refresh token prolonge quand `Remember me` est coche ;
+- cookies `HttpOnly` ;
+- reset password avec token hashe en base ;
+- CORS configure pour Vite en local ;
+- validation stricte des payloads ;
+- controle d'acces par role ;
+- audit login/register/validation/changement de role ;
+- audit des modifications du profil connecte ;
+- changement de mot de passe obligatoire apres creation admin ou validation utilisateur.
+
+A ajouter avant production :
+
+- secrets forts dans `.env` ;
+- HTTPS obligatoire ;
+- rate limiting sur login/register ;
+- envoi email pour les mots de passe temporaires ;
+- Google OAuth ;
+- upload fichier reel au lieu des Data URLs ;
+- tests automatises ;
+- CI/CD avec lint, build, tests et migrations controlees.
+
+## Commandes utiles
+
+Depuis la racine :
+
+```powershell
+npm run client:dev
+npm run client:build
+npm run server:dev
+npm run server:build
+```
+
+Backend :
+
+```powershell
+cd D:\PROJETS\Dev\mgroup-app\server
+npm run prisma:generate
+npm run prisma:migrate
+npm run lint
+npm run build
+npm run start:dev
+```
+
+Frontend :
+
+```powershell
+cd D:\PROJETS\Dev\mgroup-app\client
+npm run dev
+npm run lint
+npm run build
+```
+
+Docker :
+
+```powershell
+docker compose up -d postgres
+docker compose ps
+docker compose down
+```
+
+## Verifications effectuees
+
+Les commandes suivantes passent :
+
+```powershell
+cd D:\PROJETS\Dev\mgroup-app\server
+npm run lint
+npm run build
+
+cd D:\PROJETS\Dev\mgroup-app\client
+npm run lint
+npm run build
+```
+
+Tests HTTP effectues :
+
+```txt
+GET http://127.0.0.1:4000/api/setup/status
+POST http://127.0.0.1:4000/api/auth/forgot-password
+PATCH http://127.0.0.1:4000/api/users/me
+GET http://127.0.0.1:5173/
+```
+
+Etat actuel de la base de test au moment de la derniere verification :
+
+```json
+{
+  "requiresSetup": false,
+  "companyCount": 1,
+  "adminCount": 1
+}
+```
+
+Cela signifie que le setup initial a deja ete fait sur la base locale actuelle.
+
+## Notes importantes
+
+- Le frontend est maintenant branche sur le backend.
+- Les donnees de setup, connexion, inscription et validation admin passent par l'API.
+- Les donnees du profil connecte peuvent etre modifiees depuis `Parametres`.
+- Les photos sont envoyees en Data URL pour le prototype. En production, il faudra faire un vrai module d'upload.
+- Le dashboard admin lit les demandes `PENDING` depuis PostgreSQL.
+- Les mots de passe ne sont jamais stockes en clair en base.

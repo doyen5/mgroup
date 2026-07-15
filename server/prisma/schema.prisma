@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+  FORCE_PASSWORD_CHANGE
+}
+
+enum RoleName {
+  ADMIN
+  SECRETAIRE
+  COMPTABLE
+  RH
+  COMMERCIAL
+}
+
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_CHANGED
+  USER_REGISTERED
+  USER_APPROVED
+  USER_DISABLED
+  ROLE_CHANGED
+  PROFILE_UPDATED
+  SETUP_COMPLETED
+}
+
+model Company {
+  id             String   @id @default(cuid())
+  name           String
+  legalName      String
+  address        String
+  email          String
+  phone          String
+  photoUrl       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users User[]
+}
+
+model User {
+  id            String     @id @default(cuid())
+  companyId     String?
+  firstName     String
+  lastName      String
+  address       String?
+  email         String     @unique
+  phone         String?
+  photoUrl      String?
+  passwordHash  String?
+  status        UserStatus @default(PENDING)
+  lastLoginAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  company       Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  resetTokens   PasswordResetToken[]
+  auditLogs     LoginAuditLog[]
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        RoleName @unique
+  label       String
+  description String?
+  createdAt   DateTime @default(now())
+
+  users UserRole[]
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginAuditLog {
+  id        String      @id @default(cuid())
+  userId    String?
+  action    AuditAction
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
