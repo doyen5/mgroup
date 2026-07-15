@@ -78,6 +78,8 @@ export class SetupService {
           photoUrl: dto.adminPhotoUrl,
           passwordHash: await this.passwords.hash(dto.adminPassword),
           status: UserStatus.FORCE_PASSWORD_CHANGE,
+          emailVerifiedAt: new Date(),
+          lastPasswordChangedAt: new Date(),
           roles: {
             create: {
               roleId: adminRole.id,

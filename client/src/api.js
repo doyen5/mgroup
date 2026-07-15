@@ -26,6 +26,15 @@ export const fileToDataUrl = (file) =>
 const request = async (path, options = {}) => {
   const { skipRefresh, ...fetchOptions } = options
   const hasBody = options.body !== undefined
+  const authPathsWithoutRefresh = [
+    '/auth/login',
+    '/auth/refresh',
+    '/auth/google',
+    '/auth/phone/verify-otp',
+    '/auth/2fa/verify-login',
+    '/auth/reset-password',
+    '/auth/verify-email',
+  ]
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
     headers: hasBody ? { 'Content-Type': 'application/json', ...fetchOptions.headers } : fetchOptions.headers,
@@ -38,7 +47,7 @@ const request = async (path, options = {}) => {
 
   if (!response.ok) {
     // Si l'access token expire, on tente un refresh transparent grace au cookie HttpOnly.
-    if (response.status === 401 && !skipRefresh && path !== '/auth/login') {
+    if (response.status === 401 && !skipRefresh && !authPathsWithoutRefresh.includes(path)) {
       await request('/auth/refresh', {
         method: 'POST',
         body: {},
@@ -70,6 +79,36 @@ export const api = {
     }),
   login: (payload) =>
     request('/auth/login', {
+      method: 'POST',
+      body: payload,
+    }),
+  googleLogin: (payload) =>
+    request('/auth/google', {
+      method: 'POST',
+      body: payload,
+    }),
+  requestPhoneOtp: (payload) =>
+    request('/auth/phone/request-otp', {
+      method: 'POST',
+      body: payload,
+    }),
+  verifyPhoneOtp: (payload) =>
+    request('/auth/phone/verify-otp', {
+      method: 'POST',
+      body: payload,
+    }),
+  verifyTwoFactorLogin: (payload) =>
+    request('/auth/2fa/verify-login', {
+      method: 'POST',
+      body: payload,
+    }),
+  verifyEmail: (payload) =>
+    request('/auth/verify-email', {
+      method: 'POST',
+      body: payload,
+    }),
+  resendEmailVerification: (payload) =>
+    request('/auth/resend-email-verification', {
       method: 'POST',
       body: payload,
     }),
@@ -105,6 +144,21 @@ export const api = {
     }),
   getSessions: () => request('/auth/sessions'),
   getLoginHistory: () => request('/auth/login-history'),
+  setupTwoFactor: () =>
+    request('/auth/2fa/setup', {
+      method: 'POST',
+      body: {},
+    }),
+  enableTwoFactor: (payload) =>
+    request('/auth/2fa/enable', {
+      method: 'POST',
+      body: payload,
+    }),
+  disableTwoFactor: (payload) =>
+    request('/auth/2fa/disable', {
+      method: 'POST',
+      body: payload,
+    }),
   getUserProfile: () => request('/users/me'),
   updateUserProfile: (payload) =>
     request('/users/me', {

@@ -60,6 +60,7 @@ export class UsersService {
         data: {
           passwordHash: await this.passwords.hash(temporaryPassword),
           status: UserStatus.FORCE_PASSWORD_CHANGE,
+          lastPasswordChangedAt: new Date(),
         },
         include: { roles: { include: { role: true } } },
       });
@@ -181,6 +182,7 @@ export class UsersService {
         data: {
           passwordHash: await this.passwords.hash(temporaryPassword),
           status: UserStatus.FORCE_PASSWORD_CHANGE,
+          lastPasswordChangedAt: new Date(),
         },
         include: { roles: { include: { role: true } } },
       });
@@ -262,6 +264,7 @@ export class UsersService {
 
   async updateMe(user: AuthenticatedUser, dto: UpdateProfileDto) {
     const email = dto.email?.toLowerCase().trim();
+    const currentUser = await this.prisma.user.findUnique({ where: { id: user.sub } });
 
     if (email) {
       const existing = await this.prisma.user.findUnique({ where: { email } });
@@ -281,6 +284,8 @@ export class UsersService {
         email,
         phone: this.clean(dto.phone),
         photoUrl: dto.photoUrl,
+        emailVerifiedAt:
+          email && currentUser?.email !== email ? null : undefined,
       },
       include: { roles: { include: { role: true } } },
     });
@@ -334,6 +339,11 @@ export class UsersService {
     photoUrl?: string | null;
     status: UserStatus;
     lastLoginAt?: Date | null;
+    emailVerifiedAt?: Date | null;
+    phoneVerifiedAt?: Date | null;
+    lockedUntil?: Date | null;
+    twoFactorEnabled?: boolean;
+    lastPasswordChangedAt?: Date | null;
     roles?: Array<{ role: { name: RoleName; label: string } }>;
   }) {
     return {
@@ -346,6 +356,11 @@ export class UsersService {
       photoUrl: user.photoUrl,
       status: user.status,
       lastLoginAt: user.lastLoginAt,
+      emailVerifiedAt: user.emailVerifiedAt,
+      phoneVerifiedAt: user.phoneVerifiedAt,
+      lockedUntil: user.lockedUntil,
+      twoFactorEnabled: user.twoFactorEnabled,
+      lastPasswordChangedAt: user.lastPasswordChangedAt,
       roles: user.roles?.map(({ role }) => ({
         name: role.name,
         label: role.label,

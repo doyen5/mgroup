@@ -14,10 +14,15 @@ import { AuthenticatedUser } from '../common/types/authenticated-user';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RequestPhoneOtpDto } from './dto/request-phone-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { TwoFactorCodeDto, VerifyTwoFactorLoginDto } from './dto/two-factor.dto';
+import { ResendEmailVerificationDto, VerifyEmailDto } from './dto/verify-email.dto';
+import { VerifyPhoneOtpDto } from './dto/verify-phone-otp.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -33,13 +38,66 @@ export class AuthController {
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'],
     });
-    this.setAuthCookies(response, result.accessToken, result.refreshToken, result.expiresAt);
-    return result;
+    return this.completeAuthResponse(response, result);
   }
 
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
+  }
+
+  @Post('verify-email')
+  verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.auth.verifyEmail(dto);
+  }
+
+  @Post('resend-email-verification')
+  resendEmailVerification(@Body() dto: ResendEmailVerificationDto) {
+    return this.auth.resendEmailVerification(dto);
+  }
+
+  @Post('google')
+  async google(
+    @Body() dto: GoogleLoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.auth.googleLogin(dto, {
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'],
+    });
+    return this.completeAuthResponse(response, result);
+  }
+
+  @Post('phone/request-otp')
+  requestPhoneOtp(@Body() dto: RequestPhoneOtpDto) {
+    return this.auth.requestPhoneOtp(dto);
+  }
+
+  @Post('phone/verify-otp')
+  async verifyPhoneOtp(
+    @Body() dto: VerifyPhoneOtpDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.auth.verifyPhoneOtp(dto, {
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'],
+    });
+    return this.completeAuthResponse(response, result);
+  }
+
+  @Post('2fa/verify-login')
+  async verifyTwoFactorLogin(
+    @Body() dto: VerifyTwoFactorLoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.auth.verifyTwoFactorLogin(dto, {
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'],
+    });
+    return this.completeAuthResponse(response, result);
   }
 
   @Post('forgot-password')
@@ -59,9 +117,11 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const refreshToken = dto.refreshToken ?? this.getCookie(request, 'refreshToken');
-    const result = await this.auth.refresh(refreshToken);
-    this.setAuthCookies(response, result.accessToken, result.refreshToken, result.expiresAt);
-    return result;
+    const result = await this.auth.refresh(refreshToken, {
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'],
+    });
+    return this.completeAuthResponse(response, result);
   }
 
   @Post('logout')
@@ -71,7 +131,10 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const refreshToken = dto.refreshToken ?? this.getCookie(request, 'refreshToken');
-    const result = await this.auth.logout(refreshToken);
+    const result = await this.auth.logout(refreshToken, {
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'],
+    });
     response.clearCookie('accessToken');
     response.clearCookie('refreshToken');
     return result;
@@ -105,6 +168,24 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('2fa/setup')
+  setupTwoFactor(@CurrentUser() user: AuthenticatedUser) {
+    return this.auth.setupTwoFactor(user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/enable')
+  enableTwoFactor(@CurrentUser() user: AuthenticatedUser, @Body() dto: TwoFactorCodeDto) {
+    return this.auth.enableTwoFactor(user, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/disable')
+  disableTwoFactor(@CurrentUser() user: AuthenticatedUser, @Body() dto: TwoFactorCodeDto) {
+    return this.auth.disableTwoFactor(user, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return user;
@@ -135,5 +216,22 @@ export class AuthController {
       secure,
       expires: refreshExpiresAt,
     });
+  }
+
+  private completeAuthResponse(
+    response: Response,
+    result: {
+      accessToken?: string;
+      refreshToken?: string;
+      expiresAt?: Date;
+      [key: string]: unknown;
+    },
+  ) {
+    // Les flux qui demandent une validation admin ou 2FA ne recoivent pas encore de cookies.
+    if (result.accessToken && result.refreshToken && result.expiresAt) {
+      this.setAuthCookies(response, result.accessToken, result.refreshToken, result.expiresAt);
+    }
+
+    return result;
   }
 }

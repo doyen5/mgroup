@@ -29,6 +29,16 @@ enum AuditAction {
   LOGIN_FAILED
   LOGOUT
   PASSWORD_CHANGED
+  PASSWORD_RESET_REQUESTED
+  EMAIL_VERIFICATION_SENT
+  EMAIL_VERIFIED
+  PHONE_OTP_SENT
+  PHONE_LOGIN_SUCCESS
+  GOOGLE_LOGIN_SUCCESS
+  TWO_FACTOR_CHALLENGE
+  TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
+  ACCOUNT_LOCKED
   USER_REGISTERED
   USER_APPROVED
   USER_DISABLED
@@ -38,6 +48,11 @@ enum AuditAction {
   PROFILE_UPDATED
   COMPANY_UPDATED
   SETUP_COMPLETED
+}
+
+enum AuthChallengeType {
+  LOGIN_2FA
+  PHONE_LOGIN
 }
 
 model Company {
@@ -57,25 +72,35 @@ model Company {
 }
 
 model User {
-  id            String     @id @default(cuid())
-  companyId     String?
-  firstName     String
-  lastName      String
-  address       String?
-  email         String     @unique
-  phone         String?
-  photoUrl      String?
-  passwordHash  String?
-  status        UserStatus @default(PENDING)
-  lastLoginAt   DateTime?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id                    String     @id @default(cuid())
+  companyId             String?
+  firstName             String
+  lastName              String
+  address               String?
+  email                 String     @unique
+  phone                 String?
+  photoUrl              String?
+  passwordHash          String?
+  status                UserStatus @default(PENDING)
+  lastLoginAt           DateTime?
+  emailVerifiedAt       DateTime?
+  phoneVerifiedAt       DateTime?
+  failedLoginAttempts   Int        @default(0)
+  lockedUntil           DateTime?
+  twoFactorEnabled      Boolean    @default(false)
+  twoFactorSecret       String?
+  lastPasswordChangedAt DateTime?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
 
-  company       Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  roles         UserRole[]
-  refreshTokens RefreshToken[]
-  resetTokens   PasswordResetToken[]
-  auditLogs     LoginAuditLog[]
+  company                 Company?                 @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  roles                   UserRole[]
+  refreshTokens           RefreshToken[]
+  resetTokens             PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  authChallenges          AuthChallenge[]
+  oauthAccounts           OAuthAccount[]
+  auditLogs               LoginAuditLog[]
 }
 
 model Role {
@@ -100,25 +125,67 @@ model UserRole {
 }
 
 model RefreshToken {
-  id        String    @id @default(cuid())
-  userId    String
-  tokenHash String
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  ipAddress  String?
+  userAgent  String?
+  lastUsedAt DateTime?
+  rememberMe Boolean   @default(false)
+  createdAt  DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   tokenHash String
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuthChallenge {
+  id        String            @id @default(cuid())
+  userId    String
+  type      AuthChallengeType
+  tokenHash String?
+  expiresAt DateTime
+  usedAt    DateTime?
+  metadata  Json?
+  createdAt DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OAuthAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  provider       String
+  providerUserId String
+  email          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
 }
 
 model LoginAuditLog {

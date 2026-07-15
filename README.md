@@ -141,6 +141,22 @@ JWT_ACCESS_EXPIRES_IN="15m"
 REFRESH_TOKEN_DAYS=7
 REMEMBER_ME_DAYS=30
 BCRYPT_SALT_ROUNDS=12
+AUTH_MAX_LOGIN_ATTEMPTS=5
+AUTH_LOCK_MINUTES=15
+AUTH_DEV_EXPOSE_TOKENS=true
+EMAIL_VERIFICATION_HOURS=24
+PHONE_OTP_MINUTES=10
+TWO_FACTOR_CHALLENGE_MINUTES=10
+GOOGLE_CLIENT_ID=""
+SMTP_HOST=""
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=""
+SMTP_PASS=""
+SMTP_FROM="M Group <no-reply@mgroup.ci>"
+TWILIO_ACCOUNT_SID=""
+TWILIO_AUTH_TOKEN=""
+TWILIO_FROM_NUMBER=""
 ```
 
 Frontend : `client/.env`
@@ -149,6 +165,7 @@ Le fichier est optionnel car `client/src/api.js` utilise deja `http://127.0.0.1:
 
 ```env
 VITE_API_URL="http://127.0.0.1:4000/api"
+VITE_GOOGLE_CLIENT_ID=""
 ```
 
 ## Fonctionnement connecte frontend/backend
@@ -164,7 +181,13 @@ Si la base est vide, l'utilisateur arrive sur la page de choix :
 - Administrateur
 - Autre utilisateur
 
-Si le setup est deja fait, l'application affiche directement la page d'accueil.
+Si le setup est deja fait, l'application verifie ensuite la session :
+
+- session valide : redirection vers le dashboard ;
+- session valide avec mot de passe force : redirection vers la page de changement de mot de passe ;
+- aucune session valide : redirection vers la page `LOGIN / REGISTER`.
+
+La page d'accueil du site reste accessible depuis les boutons `Accueil du site`, mais elle n'est plus la destination automatique apres une deconnexion ou un rafraichissement sans session.
 
 ## Parcours Administrateur
 
@@ -209,10 +232,13 @@ Les boutons sociaux proposes sont :
 - Gmail ;
 - Telephone.
 
-Pour le moment, ces boutons affichent une notification prototype. Le branchement reel demandera :
+Le backend contient maintenant les integrations reelles suivantes :
 
-- Google OAuth cote backend pour Gmail ;
-- un service SMS/OTP cote backend pour la connexion ou l'inscription par telephone.
+- Gmail : verification du `idToken` Google avec `google-auth-library` ;
+- Telephone : envoi OTP SMS via Twilio si les variables Twilio sont configurees ;
+- Email : verification d'adresse et reset mot de passe via SMTP si les variables SMTP sont configurees.
+
+Sans `GOOGLE_CLIENT_ID`, `VITE_GOOGLE_CLIENT_ID`, SMTP ou Twilio, les routes restent disponibles mais indiquent clairement que le fournisseur n'est pas configure. En local, `AUTH_DEV_EXPOSE_TOKENS=true` permet d'afficher les tokens de test pour continuer a developper sans service externe.
 
 ## Parcours Autre utilisateur
 
@@ -420,15 +446,34 @@ Les preferences, notifications et modules sont stockes en `localStorage` pour le
 - le backend allonge la duree du refresh token avec `REMEMBER_ME_DAYS` ;
 - le client API tente un `POST /api/auth/refresh` automatiquement si l'access token expire.
 
-`Forgot password?` fonctionne en mode local :
+`Forgot password?` fonctionne maintenant avec email reel si SMTP est configure :
 
 1. L'utilisateur renseigne son email.
 2. Le backend cree un token dans `PasswordResetToken`.
-3. Comme aucun service email n'est encore branche, le token est renvoye a l'ecran en mode developpement.
-4. L'utilisateur saisit le token et son nouveau mot de passe.
+3. Le backend envoie un email de reinitialisation avec `nodemailer`.
+4. L'utilisateur ouvre le lien recu ou saisit le token et son nouveau mot de passe.
 5. Le backend hash le nouveau mot de passe, marque le token comme utilise et revoque les refresh tokens existants.
 
-En production, le token ne devra plus etre affiche dans l'interface. Il devra etre envoye par email.
+En developpement, `AUTH_DEV_EXPOSE_TOKENS=true` peut afficher le token pour tester sans SMTP. En production, cette variable doit etre absente ou definie a `false`.
+
+## Authentification solide
+
+La priorite securite contient maintenant :
+
+- verification email apres inscription avec `EmailVerificationToken` ;
+- reset de mot de passe par email SMTP ;
+- connexion Gmail avec verification backend du `idToken` Google ;
+- connexion par telephone avec OTP SMS via Twilio ;
+- double authentification Admin par TOTP ;
+- blocage temporaire du compte apres plusieurs echecs de connexion ;
+- sessions connectees reelles via refresh tokens hashes, IP, user-agent, expiration et revocation.
+
+Comportement important :
+
+- un compte `PENDING` ne peut pas se connecter tant que l'Admin ne l'a pas valide ;
+- un compte `DISABLED` est bloque ;
+- un compte `FORCE_PASSWORD_CHANGE` peut se connecter, mais doit modifier son mot de passe avant le dashboard ;
+- si la 2FA Admin est active, aucun cookie de session n'est pose avant validation du code OTP.
 
 ## Routes backend principales
 
@@ -446,6 +491,15 @@ Auth :
 ```txt
 POST /api/auth/register
 POST /api/auth/login
+POST /api/auth/google
+POST /api/auth/verify-email
+POST /api/auth/resend-email-verification
+POST /api/auth/phone/request-otp
+POST /api/auth/phone/verify-otp
+POST /api/auth/2fa/verify-login
+POST /api/auth/2fa/setup
+POST /api/auth/2fa/enable
+POST /api/auth/2fa/disable
 POST /api/auth/forgot-password
 POST /api/auth/reset-password
 POST /api/auth/refresh
@@ -483,6 +537,9 @@ Tables principales :
 - `UserRole`
 - `RefreshToken`
 - `PasswordResetToken`
+- `EmailVerificationToken`
+- `AuthChallenge`
+- `OAuthAccount`
 - `LoginAuditLog`
 
 Actions d'audit principales :
@@ -490,7 +547,17 @@ Actions d'audit principales :
 ```txt
 LOGIN_SUCCESS
 LOGIN_FAILED
+ACCOUNT_LOCKED
 PASSWORD_CHANGED
+PASSWORD_RESET_REQUESTED
+EMAIL_VERIFICATION_SENT
+EMAIL_VERIFIED
+PHONE_OTP_SENT
+PHONE_LOGIN_SUCCESS
+GOOGLE_LOGIN_SUCCESS
+TWO_FACTOR_CHALLENGE
+TWO_FACTOR_ENABLED
+TWO_FACTOR_DISABLED
 USER_REGISTERED
 USER_APPROVED
 USER_DISABLED
@@ -535,7 +602,12 @@ Deja en place :
 - consultation des sessions recentes ;
 - historique des connexions et actions de securite ;
 - cookies `HttpOnly` ;
-- reset password avec token hashe en base ;
+- reset password avec token hashe en base et email SMTP ;
+- verification email apres inscription ;
+- Google OAuth via verification du `idToken` ;
+- OTP telephone via Twilio ;
+- 2FA Admin par application TOTP ;
+- blocage temporaire apres echecs de connexion ;
 - CORS configure pour Vite en local ;
 - validation stricte des payloads ;
 - controle d'acces par role ;
@@ -549,8 +621,8 @@ A ajouter avant production :
 - secrets forts dans `.env` ;
 - HTTPS obligatoire ;
 - rate limiting sur login/register ;
-- envoi reel email/SMS/WhatsApp depuis le backend pour les mots de passe temporaires ;
-- Google OAuth ;
+- fournisseur SMTP, Google OAuth et Twilio configures avec des comptes de production ;
+- envoi reel WhatsApp depuis un fournisseur officiel pour les mots de passe temporaires ;
 - upload fichier reel au lieu des Data URLs ;
 - tests automatises ;
 - CI/CD avec lint, build, tests et migrations controlees.
@@ -612,7 +684,14 @@ Tests HTTP utiles pour verification locale :
 
 ```txt
 GET http://127.0.0.1:4000/api/setup/status
+POST http://127.0.0.1:4000/api/auth/login
+POST http://127.0.0.1:4000/api/auth/google
+POST http://127.0.0.1:4000/api/auth/verify-email
+POST http://127.0.0.1:4000/api/auth/phone/request-otp
+POST http://127.0.0.1:4000/api/auth/phone/verify-otp
+POST http://127.0.0.1:4000/api/auth/2fa/verify-login
 POST http://127.0.0.1:4000/api/auth/forgot-password
+POST http://127.0.0.1:4000/api/auth/reset-password
 PATCH http://127.0.0.1:4000/api/users/me
 GET http://127.0.0.1:4000/api/users
 GET http://127.0.0.1:4000/api/users/activity
@@ -624,9 +703,10 @@ PATCH http://127.0.0.1:4000/api/setup/company
 GET http://127.0.0.1:5173/
 ```
 
-Les routes `/api/auth/sessions`, `/api/auth/login-history`, `/api/setup/company` et
-`PATCH /api/setup/company` demandent une session connectee valide. Les routes entreprise demandent
-le role `ADMIN`.
+Les routes `/api/auth/sessions`, `/api/auth/login-history`, `/api/auth/2fa/setup`,
+`/api/auth/2fa/enable`, `/api/auth/2fa/disable`, `/api/setup/company` et
+`PATCH /api/setup/company` demandent une session connectee valide. Les routes entreprise et la
+configuration 2FA sont reservees au role `ADMIN`.
 
 Etat actuel de la base de test au moment de la derniere verification :
 

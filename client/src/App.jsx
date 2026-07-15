@@ -96,6 +96,73 @@ const formatFcfa = (value) => `${new Intl.NumberFormat('fr-FR').format(value)} F
 // Lecture securisee d'un champ de formulaire HTML.
 const getFormValue = (formData, name) => String(formData.get(name) ?? '').trim()
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+
+const loadGoogleIdentityScript = () =>
+  new Promise((resolve, reject) => {
+    // Google Identity Services est charge a la demande pour eviter d'alourdir le premier rendu.
+    if (window.google?.accounts?.id) {
+      resolve()
+      return
+    }
+
+    const existingScript = document.getElementById('google-identity-script')
+
+    if (existingScript) {
+      existingScript.addEventListener('load', resolve, { once: true })
+      existingScript.addEventListener('error', reject, { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.id = 'google-identity-script'
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = resolve
+    script.onerror = reject
+    document.head.appendChild(script)
+  })
+
+const requestGoogleCredential = async () => {
+  await loadGoogleIdentityScript()
+
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const timeoutId = window.setTimeout(() => {
+      if (!settled) {
+        settled = true
+        reject(new Error("Google n'a pas renvoye de jeton. Reessayez."))
+      }
+    }, 30000)
+
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback(response) {
+        if (settled) {
+          return
+        }
+
+        settled = true
+        window.clearTimeout(timeoutId)
+        resolve(response.credential)
+      },
+    })
+
+    window.google.accounts.id.prompt((notification) => {
+      if (settled) {
+        return
+      }
+
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        settled = true
+        window.clearTimeout(timeoutId)
+        reject(new Error('La fenetre Google ne peut pas etre affichee pour le moment.'))
+      }
+    })
+  })
+}
+
 const settingsStorageKey = 'mgroup.admin.preferences'
 
 const defaultAdminSettings = {
@@ -170,8 +237,19 @@ const writeAdminSettings = (settings) => {
 const auditActionLabel = (action) =>
   ({
     LOGIN_SUCCESS: 'Connexion reussie',
+    LOGIN_FAILED: 'Connexion refusee',
     LOGOUT: 'Deconnexion',
     PASSWORD_CHANGED: 'Mot de passe modifie',
+    PASSWORD_RESET_REQUESTED: 'Reset demande',
+    EMAIL_VERIFICATION_SENT: 'Verification email envoyee',
+    EMAIL_VERIFIED: 'Email verifie',
+    PHONE_OTP_SENT: 'Code telephone envoye',
+    PHONE_LOGIN_SUCCESS: 'Connexion telephone',
+    GOOGLE_LOGIN_SUCCESS: 'Connexion Google',
+    TWO_FACTOR_CHALLENGE: 'Controle 2FA demande',
+    TWO_FACTOR_ENABLED: '2FA activee',
+    TWO_FACTOR_DISABLED: '2FA desactivee',
+    ACCOUNT_LOCKED: 'Compte verrouille',
     PROFILE_UPDATED: 'Profil modifie',
     USER_APPROVED: 'Inscription validee',
     USER_DISABLED: 'Compte desactive',
@@ -221,26 +299,85 @@ function App() {
   const [authMode, setAuthMode] = useState('login')
   const [authNotice, setAuthNotice] = useState('')
   const [passwordNotice, setPasswordNotice] = useState('')
+  const [initialResetToken, setInitialResetToken] = useState('')
   const [createdAdminEmail, setCreatedAdminEmail] = useState('')
   const [activeUser, setActiveUser] = useState(null)
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState(null)
   const [isAuthBusy, setIsAuthBusy] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
   const [lastLoginAt, setLastLoginAt] = useState(null)
   const [showLoginToast, setShowLoginToast] = useState(false)
 
-  // Au lancement, le frontend demande au backend si le premier setup admin est requis.
+  // Au lancement, le frontend verifie le setup puis restaure la session si un cookie valide existe.
   useEffect(() => {
     let isMounted = true
 
     api
       .getSetupStatus()
-      .then((status) => {
+      .then(async (status) => {
         if (!isMounted) {
           return
         }
 
         setSetupStatus(status)
-        setCurrentView(status.requiresSetup ? 'gateway' : 'home')
+        const urlParams = new URLSearchParams(window.location.search)
+        const verifyEmailToken = urlParams.get('verifyEmailToken')
+        const resetToken = urlParams.get('resetToken')
+
+        if (verifyEmailToken) {
+          try {
+            await api.verifyEmail({ token: verifyEmailToken })
+            setAuthNotice('Votre email est verifie. Vous pouvez vous connecter.')
+          } catch (error) {
+            setAuthNotice(error.message)
+          }
+
+          window.history.replaceState({}, '', window.location.pathname)
+          setAuthMode('login')
+          setCurrentView('auth')
+          return
+        }
+
+        if (resetToken) {
+          setInitialResetToken(resetToken)
+          setAuthNotice('Token de reinitialisation detecte. Definissez votre nouveau mot de passe.')
+          window.history.replaceState({}, '', window.location.pathname)
+          setAuthMode('login')
+          setCurrentView('auth')
+          return
+        }
+
+        if (status.requiresSetup) {
+          setCurrentView('gateway')
+          return
+        }
+
+        try {
+          const profile = await api.getUserProfile()
+
+          if (!isMounted) {
+            return
+          }
+
+          setActiveUser(toDashboardUser(profile))
+          setLastLoginAt(profile.lastLoginAt ? new Date(profile.lastLoginAt) : null)
+
+          if (profile.status === 'FORCE_PASSWORD_CHANGE') {
+            setPasswordNotice('Votre compte exige une modification du mot de passe avant le dashboard.')
+            setCurrentView('passwordChange')
+            return
+          }
+
+          setCurrentView('dashboard')
+        } catch {
+          if (!isMounted) {
+            return
+          }
+
+          setAuthMode('login')
+          setAuthNotice('Connectez-vous pour acceder a votre espace.')
+          setCurrentView('auth')
+        }
       })
       .catch((error) => {
         if (!isMounted) {
@@ -311,6 +448,58 @@ function App() {
     showView('auth')
   }
 
+  const handleAuthenticatedResult = (result) => {
+    // Tous les flux d'auth reutilisent cette sortie : mot de passe, Google, telephone et 2FA.
+    if (result.requiresApproval) {
+      showView('pendingApproval')
+      return
+    }
+
+    if (result.requiresTwoFactor) {
+      setTwoFactorChallenge({
+        challengeId: result.challengeId,
+        message: result.message,
+      })
+      setPasswordNotice('Saisissez le code 2FA de votre application d authentification.')
+      showView('twoFactorLogin')
+      return
+    }
+
+    const dashboardUser = toDashboardUser(result.user)
+
+    setActiveUser(dashboardUser)
+    setLastLoginAt(result.user?.lastLoginAt ? new Date(result.user.lastLoginAt) : new Date())
+    setShowLoginToast(true)
+
+    if (result.forcePasswordChange) {
+      setPasswordNotice('Votre compte exige une modification du mot de passe avant le dashboard.')
+      showView('passwordChange')
+      return
+    }
+
+    showView('dashboard')
+  }
+
+  const handleGoogleAccess = async () => {
+    if (!googleClientId) {
+      setAuthNotice('Google OAuth n est pas configure. Ajoutez VITE_GOOGLE_CLIENT_ID cote client et GOOGLE_CLIENT_ID cote serveur.')
+      return
+    }
+
+    setIsAuthBusy(true)
+    setAuthNotice('')
+
+    try {
+      const idToken = await requestGoogleCredential()
+      const result = await api.googleLogin({ idToken })
+      handleAuthenticatedResult(result)
+    } catch (error) {
+      setAuthNotice(error.message)
+    } finally {
+      setIsAuthBusy(false)
+    }
+  }
+
   const handleLogin = async (event) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
@@ -324,7 +513,6 @@ function App() {
         password: getFormValue(formData, 'password'),
         rememberMe: formData.get('rememberMe') === 'on',
       })
-      const dashboardUser = toDashboardUser(result.user)
 
       // Remember me garde uniquement l'email localement ; les tokens restent en cookies HttpOnly.
       if (formData.get('rememberMe') === 'on') {
@@ -333,19 +521,36 @@ function App() {
         window.localStorage.removeItem('mgroup.rememberedEmail')
       }
 
-      setActiveUser(dashboardUser)
-      setLastLoginAt(result.user?.lastLoginAt ? new Date(result.user.lastLoginAt) : new Date())
-      setShowLoginToast(true)
-
-      if (result.forcePasswordChange) {
-        setPasswordNotice('Votre compte exige une modification du mot de passe avant le dashboard.')
-        showView('passwordChange')
-        return
-      }
-
-      showView('dashboard')
+      handleAuthenticatedResult(result)
     } catch (error) {
       setAuthNotice(error.message)
+    } finally {
+      setIsAuthBusy(false)
+    }
+  }
+
+  const handleTwoFactorLogin = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!twoFactorChallenge?.challengeId) {
+      setPasswordNotice('Challenge 2FA introuvable. Recommencez la connexion.')
+      return
+    }
+
+    setIsAuthBusy(true)
+    setPasswordNotice('')
+
+    try {
+      const result = await api.verifyTwoFactorLogin({
+        challengeId: twoFactorChallenge.challengeId,
+        code: getFormValue(formData, 'code'),
+        rememberMe: formData.get('rememberMe') === 'on',
+      })
+      setTwoFactorChallenge(null)
+      handleAuthenticatedResult(result)
+    } catch (error) {
+      setPasswordNotice(error.message)
     } finally {
       setIsAuthBusy(false)
     }
@@ -444,17 +649,16 @@ function App() {
       {currentView === 'auth' && (
         <AuthPage
           authMode={authMode}
+          initialResetToken={initialResetToken}
           isBusy={isAuthBusy}
           notice={authNotice}
-          onGmailAccess={() =>
-            setAuthNotice('Google OAuth sera branche apres la configuration OAuth backend.')
-          }
-          onPhoneAccess={() =>
-            setAuthNotice('La connexion par telephone sera branchee avec le service SMS/OTP backend.')
-          }
+          onAuthSuccess={handleAuthenticatedResult}
+          onGmailAccess={handleGoogleAccess}
+          onPhoneAccess={() => setAuthNotice('')}
           onModeChange={(mode) => {
             setAuthMode(mode)
             setAuthNotice('')
+            setInitialResetToken('')
           }}
           onRegisterSubmit={handleRegister}
           onSubmit={handleLogin}
@@ -466,6 +670,15 @@ function App() {
           isBusy={isAuthBusy}
           notice={passwordNotice}
           onSubmit={handlePasswordChange}
+        />
+      )}
+
+      {currentView === 'twoFactorLogin' && (
+        <TwoFactorLoginPage
+          isBusy={isAuthBusy}
+          notice={passwordNotice}
+          onBack={() => goLogin('Reconnectez-vous pour relancer le controle 2FA.')}
+          onSubmit={handleTwoFactorLogin}
         />
       )}
 
@@ -650,8 +863,10 @@ function HomeView({ onOpenAuth }) {
 
 function AuthPage({
   authMode,
+  initialResetToken,
   isBusy,
   notice,
+  onAuthSuccess,
   onGmailAccess,
   onPhoneAccess,
   onModeChange,
@@ -665,9 +880,11 @@ function AuthPage({
   const [rememberMe, setRememberMe] = useState(
     () => Boolean(window.localStorage.getItem('mgroup.rememberedEmail')),
   )
-  const [passwordFlow, setPasswordFlow] = useState('login')
-  const [resetNotice, setResetNotice] = useState('')
-  const [resetToken, setResetToken] = useState('')
+  const [passwordFlow, setPasswordFlow] = useState(() => (initialResetToken ? 'reset' : 'login'))
+  const [resetNotice, setResetNotice] = useState(() =>
+    initialResetToken ? 'Token recu par email. Choisissez votre nouveau mot de passe.' : '',
+  )
+  const [resetToken, setResetToken] = useState(() => initialResetToken ?? '')
   const [isResetBusy, setIsResetBusy] = useState(false)
 
   // L'inscription reprend au debut quand on repasse sur l'onglet Register.
@@ -768,13 +985,27 @@ function AuthPage({
           <button type="button" onClick={onGmailAccess} aria-label="Gmail">
             G
           </button>
-          <button type="button" onClick={onPhoneAccess} aria-label="Telephone">
+          <button
+            type="button"
+            onClick={() => {
+              onPhoneAccess()
+              setPasswordFlow('phone')
+              setResetNotice('')
+            }}
+            aria-label="Telephone"
+          >
             <Smartphone size={17} strokeWidth={2.4} aria-hidden="true" />
           </button>
         </div>
         <p className="auth-separator">or:</p>
 
-        {authMode === 'login' && passwordFlow !== 'login' ? (
+        {passwordFlow === 'phone' ? (
+          <PhoneOtpPanel
+            isBusy={isBusy}
+            onBack={() => setPasswordFlow('login')}
+            onSuccess={onAuthSuccess}
+          />
+        ) : authMode === 'login' && passwordFlow !== 'login' ? (
           <ForgotPasswordPanel
             isBusy={isResetBusy}
             onBack={() => {
@@ -897,6 +1128,104 @@ function ForgotPasswordPanel({
         </button>
         <button type="submit" className="primary-button" disabled={isBusy}>
           {isBusy ? 'Validation...' : 'Changer le mot de passe'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function PhoneOtpPanel({ isBusy, onBack, onSuccess }) {
+  const [phone, setPhone] = useState('')
+  const [code, setCode] = useState('')
+  const [notice, setNotice] = useState('')
+  const [developmentOtp, setDevelopmentOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
+  const [isPhoneBusy, setIsPhoneBusy] = useState(false)
+
+  const requestOtp = async (event) => {
+    event.preventDefault()
+    setIsPhoneBusy(true)
+    setNotice('')
+    setDevelopmentOtp('')
+
+    try {
+      const result = await api.requestPhoneOtp({ phone })
+      setOtpSent(true)
+      setDevelopmentOtp(result.developmentOtp ?? '')
+      setNotice(
+        result.smsDelivered
+          ? 'Code envoye par SMS.'
+          : 'Code genere. Configurez Twilio pour envoyer le SMS reel.',
+      )
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsPhoneBusy(false)
+    }
+  }
+
+  const verifyOtp = async (event) => {
+    event.preventDefault()
+    setIsPhoneBusy(true)
+    setNotice('')
+
+    try {
+      const result = await api.verifyPhoneOtp({ phone, code, rememberMe })
+      onSuccess(result)
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsPhoneBusy(false)
+    }
+  }
+
+  return (
+    <form className="auth-form clean" onSubmit={otpSent ? verifyOtp : requestOtp}>
+      {/* Connexion par telephone : l'OTP est valide cote backend avant de creer la session. */}
+      {notice && <p className="auth-notice">{notice}</p>}
+      <label>
+        Telephone
+        <input
+          name="phone"
+          type="tel"
+          placeholder="+225 00 00 00 00 00"
+          required
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+        />
+      </label>
+      {otpSent && (
+        <label>
+          Code OTP
+          <input
+            name="code"
+            type="text"
+            inputMode="numeric"
+            placeholder="123456"
+            required
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+          />
+        </label>
+      )}
+      {developmentOtp && <p className="auth-dev-token">Code test : {developmentOtp}</p>}
+      {otpSent && (
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(event) => setRememberMe(event.target.checked)}
+          />
+          Remember me
+        </label>
+      )}
+      <div className="setup-actions">
+        <button type="button" className="secondary-button bordered" onClick={onBack}>
+          Retour
+        </button>
+        <button type="submit" className="primary-button" disabled={isBusy || isPhoneBusy}>
+          {otpSent ? 'Verifier le code' : 'Recevoir le code'}
         </button>
       </div>
     </form>
@@ -1237,6 +1566,41 @@ function AdminSetupWizard({ onGoDashboard, onGoHome, onSetupComplete }) {
           </>
         )}
       </div>
+    </section>
+  )
+}
+
+function TwoFactorLoginPage({ isBusy, notice, onBack, onSubmit }) {
+  return (
+    <section className="auth-page" aria-label="Verification 2FA">
+      {/* Challenge 2FA : aucun cookie de session n'est pose tant que le code n'est pas valide. */}
+      <form className="auth-card auth-form clean" onSubmit={onSubmit}>
+        <div className="auth-logo-frame">
+          <img src="/mgroup-logo.svg" alt="Logo M Group" />
+        </div>
+        <p className="eyebrow">Securite Admin</p>
+        <h1>Code de verification.</h1>
+        <p className="auth-lead">
+          Ouvrez votre application d'authentification et saisissez le code a 6 chiffres.
+        </p>
+        {notice && <p className="auth-notice">{notice}</p>}
+        <label>
+          Code 2FA
+          <input name="code" type="text" inputMode="numeric" minLength="6" required />
+        </label>
+        <label className="check-row">
+          <input name="rememberMe" type="checkbox" />
+          Remember me
+        </label>
+        <div className="setup-actions">
+          <button type="button" className="secondary-button bordered" onClick={onBack}>
+            Retour
+          </button>
+          <button type="submit" className="primary-button" disabled={isBusy}>
+            {isBusy ? 'Verification...' : 'Valider'}
+          </button>
+        </div>
+      </form>
     </section>
   )
 }
@@ -2280,6 +2644,8 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
   const [sessions, setSessions] = useState([])
   const [loginHistory, setLoginHistory] = useState([])
   const [isSecurityLoading, setIsSecurityLoading] = useState(false)
+  const [twoFactorSetup, setTwoFactorSetup] = useState(null)
+  const [twoFactorCode, setTwoFactorCode] = useState('')
   const [users, setUsers] = useState([])
   const [activityLog, setActivityLog] = useState([])
   const [selectedUserHistory, setSelectedUserHistory] = useState([])
@@ -2687,6 +3053,72 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
     }
   }
 
+  const prepareTwoFactor = async () => {
+    setSavingTarget('2fa-setup')
+    showNotice('', '')
+
+    try {
+      const result = await api.setupTwoFactor()
+      setTwoFactorSetup(result)
+      showNotice('success', 'Secret 2FA genere. Ajoutez-le dans votre application OTP.')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
+  const enableTwoFactor = async () => {
+    setSavingTarget('2fa-enable')
+    showNotice('', '')
+
+    try {
+      await api.enableTwoFactor({ code: twoFactorCode })
+      setTwoFactorCode('')
+      setTwoFactorSetup(null)
+      const updatedProfile = await api.getUserProfile()
+      await onProfileUpdate({
+        firstName: updatedProfile.firstName,
+        lastName: updatedProfile.lastName,
+        address: updatedProfile.address,
+        email: updatedProfile.email,
+        phone: updatedProfile.phone,
+        photoUrl: updatedProfile.photoUrl,
+      })
+      showNotice('success', 'Authentification a deux facteurs activee.')
+      onAdminEvent?.('2FA activee')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
+  const disableTwoFactor = async () => {
+    setSavingTarget('2fa-disable')
+    showNotice('', '')
+
+    try {
+      await api.disableTwoFactor({ code: twoFactorCode })
+      setTwoFactorCode('')
+      const updatedProfile = await api.getUserProfile()
+      await onProfileUpdate({
+        firstName: updatedProfile.firstName,
+        lastName: updatedProfile.lastName,
+        address: updatedProfile.address,
+        email: updatedProfile.email,
+        phone: updatedProfile.phone,
+        photoUrl: updatedProfile.photoUrl,
+      })
+      showNotice('success', 'Authentification a deux facteurs desactivee.')
+      onAdminEvent?.('2FA desactivee')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
   const saveCompany = async (event) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
@@ -2926,12 +3358,63 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
               <p className="eyebrow">Protection avancee</p>
               <h3>Authentification a deux facteurs.</h3>
               <p>
-                Le branchement 2FA sera active plus tard avec un vrai fournisseur OTP ou email.
+                La 2FA protege le compte Admin avec une application OTP comme Google
+                Authenticator, Microsoft Authenticator ou 1Password.
               </p>
-              <label className="settings-toggle disabled">
-                <input type="checkbox" disabled />
-                Activer la 2FA plus tard
+              <span className={`status-pill ${user.twoFactorEnabled ? 'active' : 'pending'}`}>
+                {user.twoFactorEnabled ? '2FA activee' : '2FA inactive'}
+              </span>
+              {twoFactorSetup && (
+                <div className="two-factor-box">
+                  <span>Secret OTP</span>
+                  <strong>{twoFactorSetup.secret}</strong>
+                  {twoFactorSetup.otpauthUrl && (
+                    <a href={twoFactorSetup.otpauthUrl}>Ouvrir dans une application compatible</a>
+                  )}
+                </div>
+              )}
+              <label>
+                Code OTP
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="123456"
+                  value={twoFactorCode}
+                  onChange={(event) => setTwoFactorCode(event.target.value)}
+                />
               </label>
+              <div className="settings-actions left">
+                {!user.twoFactorEnabled && !twoFactorSetup && (
+                  <button
+                    type="button"
+                    className="secondary-button bordered"
+                    disabled={savingTarget === '2fa-setup'}
+                    onClick={prepareTwoFactor}
+                  >
+                    {savingTarget === '2fa-setup' ? 'Preparation...' : 'Generer la 2FA'}
+                  </button>
+                )}
+                {!user.twoFactorEnabled && twoFactorSetup && (
+                  <button
+                    type="button"
+                    className="primary-button"
+                    disabled={savingTarget === '2fa-enable'}
+                    onClick={enableTwoFactor}
+                  >
+                    {savingTarget === '2fa-enable' ? 'Activation...' : 'Activer la 2FA'}
+                  </button>
+                )}
+                {user.twoFactorEnabled && (
+                  <button
+                    type="button"
+                    className="danger-button"
+                    disabled={savingTarget === '2fa-disable'}
+                    onClick={disableTwoFactor}
+                  >
+                    {savingTarget === '2fa-disable' ? 'Desactivation...' : 'Desactiver la 2FA'}
+                  </button>
+                )}
+              </div>
               <label className="settings-toggle disabled">
                 <input type="checkbox" checked disabled readOnly />
                 Notifier les connexions suspectes
