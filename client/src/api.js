@@ -98,9 +98,22 @@ export const api = {
       method: 'POST',
       body: payload,
     }),
+  logoutAllDevices: () =>
+    request('/auth/logout-all', {
+      method: 'POST',
+      body: {},
+    }),
+  getSessions: () => request('/auth/sessions'),
+  getLoginHistory: () => request('/auth/login-history'),
   getUserProfile: () => request('/users/me'),
   updateUserProfile: (payload) =>
     request('/users/me', {
+      method: 'PATCH',
+      body: payload,
+    }),
+  getCompany: () => request('/setup/company'),
+  updateCompany: (payload) =>
+    request('/setup/company', {
       method: 'PATCH',
       body: payload,
     }),
@@ -109,5 +122,10 @@ export const api = {
     request(`/users/${userId}/approve`, {
       method: 'PATCH',
       body: payload,
+    }),
+  disableUser: (userId) =>
+    request(`/users/${userId}/disable`, {
+      method: 'PATCH',
+      body: {},
     }),
 }

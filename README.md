@@ -8,7 +8,7 @@ Le projet contient maintenant :
 - un backend NestJS/Prisma ;
 - une base PostgreSQL lancee avec Docker ;
 - une authentification avec mots de passe hashes, JWT et refresh tokens ;
-- une gestion des roles Admin, Secretaire, Comptable, RH et Commercial.
+- une gestion des roles Admin, Secretaire, Comptable, RH, Commercial, Client et Autre.
 
 ## Objectif metier
 
@@ -22,6 +22,7 @@ Frontend :
 
 - React
 - Vite
+- lucide-react pour les icones du dashboard
 - CSS personnalise
 - `fetch` avec cookies `HttpOnly`
 - fichier API centralise : `client/src/api.js`
@@ -235,6 +236,11 @@ Pour valider un utilisateur, l'admin choisit un role et confirme :
 PATCH /api/users/:id/approve
 ```
 
+L'admin dispose aussi de deux actions avant validation :
+
+- `Voir` : ouvre une fiche de verification pour controler si le nom, le prenom, l'adresse, le contact, l'email et la photo sont remplis ;
+- `Annuler` : ouvre une confirmation propre puis refuse la demande en passant le compte en `DISABLED`.
+
 Le backend :
 
 - attribue le role choisi ;
@@ -242,6 +248,14 @@ Le backend :
 - hash le mot de passe ;
 - passe l'utilisateur en `FORCE_PASSWORD_CHANGE` ;
 - renvoie le mot de passe temporaire a communiquer de maniere securisee.
+
+Apres validation, le frontend affiche le mot de passe temporaire et prepare trois moyens d'envoi :
+
+- WhatsApp : ouverture d'un lien `wa.me` avec le message deja rempli ;
+- SMS : ouverture de l'application SMS locale avec le message deja rempli ;
+- Gmail : ouverture de la fenetre de composition Gmail avec le destinataire et le message.
+
+Important : en mode prototype, ces boutons preparent l'envoi mais ne remplacent pas encore un vrai fournisseur serveur. En production, il faudra brancher un service email/SMS/WhatsApp officiel et ne plus exposer le mot de passe temporaire dans l'interface.
 
 ## Dashboard Admin
 
@@ -253,20 +267,25 @@ Le dashboard Admin contient maintenant :
 - une zone profil avec nom complet, role, photo/avatar et derniere connexion ;
 - une horloge temps reel ;
 - des cartes statistiques colorees ;
-- des panneaux graphiques visuels ;
+- des panneaux graphiques visuels avec budget et montants en FCFA ;
+- des pages internes accessibles depuis le menu : Inscriptions, Evenements, Finance, Equipe, Budget, Alertes et Parametres ;
+- des alertes sonores cote navigateur pour prevenir l'Admin lors des changements importants ;
 - la validation des inscriptions en attente depuis PostgreSQL.
-- une section `Parametres` pour modifier le profil connecte.
+- une section `Parametres` complete pour le profil, la securite et l'entreprise.
 
-Dans `Parametres`, l'utilisateur peut modifier :
+La page `Alertes` permet d'activer/desactiver le son et de tester une notification. Le son est genere dans le navigateur avec Web Audio API, sans fichier audio externe.
+
+Dans `Parametres > Profil utilisateur`, l'utilisateur peut modifier :
 
 - sa photo de profil ;
 - son nom ;
 - son prenom ;
 - son adresse ;
 - son contact ;
-- son email.
+- son email avec confirmation avant sauvegarde.
 
 Le role reste non modifiable par l'utilisateur. Il est gere par l'administrateur.
+La date de derniere connexion est affichee en lecture seule.
 
 La sauvegarde appelle :
 
@@ -275,6 +294,44 @@ PATCH /api/users/me
 ```
 
 Chaque modification du profil est enregistree dans `LoginAuditLog` avec l'action `PROFILE_UPDATED`.
+
+Dans `Parametres > Securite du compte`, l'utilisateur peut :
+
+- changer son mot de passe ;
+- deconnecter la session courante ;
+- revoquer toutes les sessions actives du compte ;
+- voir les sessions recentes ;
+- voir l'historique des actions de connexion/securite ;
+- voir les emplacements prevus pour la 2FA et les notifications de connexion suspecte.
+
+Routes utilisees :
+
+```txt
+POST /api/auth/change-password
+POST /api/auth/logout-all
+GET  /api/auth/sessions
+GET  /api/auth/login-history
+```
+
+Dans `Parametres > Parametres entreprise`, seul l'Admin peut modifier :
+
+- le nom de l'entreprise ;
+- la raison sociale ;
+- le logo ;
+- l'adresse ;
+- les contacts ;
+- l'email officiel ;
+- les informations fiscales ou administratives ;
+- la signature/footer pour documents.
+
+Routes utilisees :
+
+```txt
+GET   /api/setup/company
+PATCH /api/setup/company
+```
+
+Chaque modification entreprise est auditee avec l'action `COMPANY_UPDATED`.
 
 ## Remember me et mot de passe oublie
 
@@ -302,6 +359,8 @@ Setup :
 ```txt
 GET  /api/setup/status
 POST /api/setup/company-admin
+GET  /api/setup/company
+PATCH /api/setup/company
 ```
 
 Auth :
@@ -313,7 +372,10 @@ POST /api/auth/forgot-password
 POST /api/auth/reset-password
 POST /api/auth/refresh
 POST /api/auth/logout
+POST /api/auth/logout-all
 POST /api/auth/change-password
+GET  /api/auth/sessions
+GET  /api/auth/login-history
 GET  /api/auth/me
 ```
 
@@ -332,7 +394,7 @@ PATCH /api/users/:id/disable
 
 Tables principales :
 
-- `Company`
+- `Company` : nom, raison sociale, adresse, email, contact, logo, informations fiscales, footer documents
 - `User`
 - `Role`
 - `UserRole`
@@ -351,6 +413,7 @@ USER_APPROVED
 USER_DISABLED
 ROLE_CHANGED
 PROFILE_UPDATED
+COMPANY_UPDATED
 SETUP_COMPLETED
 ```
 
@@ -371,6 +434,8 @@ SECRETAIRE
 COMPTABLE
 RH
 COMMERCIAL
+CLIENT
+AUTRE
 ```
 
 ## Securite actuelle
@@ -381,6 +446,9 @@ Deja en place :
 - access token JWT ;
 - refresh token aleatoire hashe en base ;
 - refresh token prolonge quand `Remember me` est coche ;
+- revocation de toutes les sessions actives d'un compte ;
+- consultation des sessions recentes ;
+- historique des connexions et actions de securite ;
 - cookies `HttpOnly` ;
 - reset password avec token hashe en base ;
 - CORS configure pour Vite en local ;
@@ -388,6 +456,7 @@ Deja en place :
 - controle d'acces par role ;
 - audit login/register/validation/changement de role ;
 - audit des modifications du profil connecte ;
+- audit des modifications entreprise ;
 - changement de mot de passe obligatoire apres creation admin ou validation utilisateur.
 
 A ajouter avant production :
@@ -395,7 +464,7 @@ A ajouter avant production :
 - secrets forts dans `.env` ;
 - HTTPS obligatoire ;
 - rate limiting sur login/register ;
-- envoi email pour les mots de passe temporaires ;
+- envoi reel email/SMS/WhatsApp depuis le backend pour les mots de passe temporaires ;
 - Google OAuth ;
 - upload fichier reel au lieu des Data URLs ;
 - tests automatises ;
@@ -454,14 +523,22 @@ npm run lint
 npm run build
 ```
 
-Tests HTTP effectues :
+Tests HTTP utiles pour verification locale :
 
 ```txt
 GET http://127.0.0.1:4000/api/setup/status
 POST http://127.0.0.1:4000/api/auth/forgot-password
 PATCH http://127.0.0.1:4000/api/users/me
+GET http://127.0.0.1:4000/api/auth/sessions
+GET http://127.0.0.1:4000/api/auth/login-history
+GET http://127.0.0.1:4000/api/setup/company
+PATCH http://127.0.0.1:4000/api/setup/company
 GET http://127.0.0.1:5173/
 ```
+
+Les routes `/api/auth/sessions`, `/api/auth/login-history`, `/api/setup/company` et
+`PATCH /api/setup/company` demandent une session connectee valide. Les routes entreprise demandent
+le role `ADMIN`.
 
 Etat actuel de la base de test au moment de la derniere verification :
 
@@ -480,6 +557,8 @@ Cela signifie que le setup initial a deja ete fait sur la base locale actuelle.
 - Le frontend est maintenant branche sur le backend.
 - Les donnees de setup, connexion, inscription et validation admin passent par l'API.
 - Les donnees du profil connecte peuvent etre modifiees depuis `Parametres`.
+- Les parametres Admin gerent maintenant le profil, la securite du compte et l'entreprise.
+- Les sessions actives peuvent etre consultees et revoquees depuis l'interface.
 - Les photos sont envoyees en Data URL pour le prototype. En production, il faudra faire un vrai module d'upload.
 - Le dashboard admin lit les demandes `PENDING` depuis PostgreSQL.
 - Les mots de passe ne sont jamais stockes en clair en base.

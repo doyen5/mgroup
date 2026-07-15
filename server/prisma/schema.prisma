@@ -20,6 +20,8 @@ enum RoleName {
   COMPTABLE
   RH
   COMMERCIAL
+  CLIENT
+  AUTRE
 }
 
 enum AuditAction {
@@ -32,6 +34,7 @@ enum AuditAction {
   USER_DISABLED
   ROLE_CHANGED
   PROFILE_UPDATED
+  COMPANY_UPDATED
   SETUP_COMPLETED
 }
 
@@ -43,6 +46,8 @@ model Company {
   email          String
   phone          String
   photoUrl       String?
+  taxInfo        String?
+  documentFooter String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

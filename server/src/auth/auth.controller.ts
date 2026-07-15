@@ -78,6 +78,27 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('logout-all')
+  logoutAll(@CurrentUser() user: AuthenticatedUser) {
+    // Action de securite : retire tous les refresh tokens du compte connecte.
+    return this.auth.logoutAll(user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  sessions(@CurrentUser() user: AuthenticatedUser) {
+    // Liste les sessions recentes sans exposer les tokens stockes en base.
+    return this.auth.sessions(user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('login-history')
+  loginHistory(@CurrentUser() user: AuthenticatedUser) {
+    // Alimente l'historique de connexions dans Parametres > Securite.
+    return this.auth.loginHistory(user);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('change-password')
   changePassword(@CurrentUser() user: AuthenticatedUser, @Body() dto: ChangePasswordDto) {
     return this.auth.changePassword(user, dto);

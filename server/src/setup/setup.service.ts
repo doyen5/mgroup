@@ -1,9 +1,11 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, RoleName, UserStatus } from '@prisma/client';
 import { DEFAULT_ROLES } from '../common/roles';
 import { PasswordService } from '../common/security/password.service';
+import { AuthenticatedUser } from '../common/types/authenticated-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { CompanyAdminSetupDto } from './dto/company-admin-setup.dto';
+import { UpdateCompanyDto } from './dto/update-company.dto';
 
 @Injectable()
 export class SetupService {
@@ -109,5 +111,52 @@ export class SetupService {
         },
       };
     });
+  }
+
+  async company() {
+    // Le prototype gere une seule entreprise M Group ; on recupere donc la premiere.
+    const company = await this.prisma.company.findFirst();
+
+    if (!company) {
+      throw new NotFoundException('Company has not been configured yet.');
+    }
+
+    return company;
+  }
+
+  async updateCompany(dto: UpdateCompanyDto, admin: AuthenticatedUser) {
+    const company = await this.company();
+
+    // Les champs absents restent inchanges, ce qui permet des sauvegardes partielles.
+    const updated = await this.prisma.company.update({
+      where: { id: company.id },
+      data: {
+        name: this.clean(dto.name),
+        legalName: this.clean(dto.legalName),
+        address: this.clean(dto.address),
+        email: this.cleanEmail(dto.email),
+        phone: this.clean(dto.phone),
+        photoUrl: dto.photoUrl,
+        taxInfo: this.clean(dto.taxInfo),
+        documentFooter: this.clean(dto.documentFooter),
+      },
+    });
+
+    await this.prisma.loginAuditLog.create({
+      data: {
+        userId: admin.sub,
+        action: AuditAction.COMPANY_UPDATED,
+      },
+    });
+
+    return updated;
+  }
+
+  private clean(value?: string) {
+    return value === undefined ? undefined : value.trim();
+  }
+
+  private cleanEmail(value?: string) {
+    return value === undefined ? undefined : value.toLowerCase().trim();
   }
 }

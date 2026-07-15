@@ -1,4 +1,26 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Activity,
+  AlertTriangle,
+  Banknote,
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  Copy,
+  Eye,
+  Home,
+  LogOut,
+  Mail,
+  MessageCircle,
+  Smartphone,
+  UserPlus,
+  Users,
+  Volume2,
+  VolumeX,
+  Wallet,
+  XCircle,
+} from 'lucide-react'
 import { api, fileToDataUrl } from './api'
 import heroImage from './assets/mgroup-event-hero.jpg'
 import './App.css'
@@ -28,7 +50,35 @@ const availableRoles = [
   { value: 'COMPTABLE', label: 'Comptable' },
   { value: 'RH', label: 'RH' },
   { value: 'COMMERCIAL', label: 'Commercial' },
+  { value: 'CLIENT', label: 'Client' },
+  { value: 'AUTRE', label: 'Autre' },
   { value: 'ADMIN', label: 'Admin' },
+]
+
+const eventRows = [
+  { title: 'Concert prive - Plateau', date: '22 juillet 2026', budget: 4500000, status: 'Production' },
+  { title: 'Conference partenaire', date: '28 juillet 2026', budget: 2800000, status: 'Validation' },
+  { title: 'Activation marque', date: '04 aout 2026', budget: 6200000, status: 'Brief client' },
+]
+
+const financeRows = [
+  { label: 'Cachets artistes', value: 9200000, percent: 58 },
+  { label: 'Technique et scene', value: 5400000, percent: 34 },
+  { label: 'Communication', value: 2700000, percent: 22 },
+  { label: 'Logistique', value: 3900000, percent: 28 },
+]
+
+const teamRows = [
+  { role: 'Production', members: 8, load: 76 },
+  { role: 'Finance', members: 3, load: 42 },
+  { role: 'Commercial', members: 5, load: 61 },
+  { role: 'RH', members: 2, load: 35 },
+]
+
+const alertRows = [
+  { title: 'Budget technique a valider', level: 'Haute', time: 'Aujourd hui 09:20' },
+  { title: 'Nouvelle demande utilisateur', level: 'Moyenne', time: 'Aujourd hui 08:42' },
+  { title: 'Facture prestataire en attente', level: 'Haute', time: 'Hier 18:10' },
 ]
 
 // Formatage unique pour l'horloge, le toast et la derniere connexion.
@@ -38,8 +88,34 @@ const formatDateTime = (date) =>
     timeStyle: 'medium',
   }).format(date)
 
+const formatFcfa = (value) => `${new Intl.NumberFormat('fr-FR').format(value)} FCFA`
+
 // Lecture securisee d'un champ de formulaire HTML.
 const getFormValue = (formData, name) => String(formData.get(name) ?? '').trim()
+
+// Traduit les evenements d'audit backend en libelles lisibles dans l'interface.
+const auditActionLabel = (action) =>
+  ({
+    LOGIN_SUCCESS: 'Connexion reussie',
+    LOGOUT: 'Deconnexion',
+    PASSWORD_CHANGED: 'Mot de passe modifie',
+    PROFILE_UPDATED: 'Profil modifie',
+  })[action] ?? action
+
+// Controle les informations demandees lors de l'inscription avant validation Admin.
+const getRegistrationChecklist = (user) => [
+  { label: 'Nom', value: user.lastName },
+  { label: 'Prenom(s)', value: user.firstName },
+  { label: 'Adresse', value: user.address },
+  { label: 'Contact', value: user.phone },
+  { label: 'Email', value: user.email },
+  { label: 'Photo', value: user.photoUrl },
+]
+
+const normalizePhone = (phone) => String(phone ?? '').replace(/[^\d]/g, '')
+
+const buildTemporaryPasswordMessage = ({ email, fullName, password, role }) =>
+  `Bonjour ${fullName || ''}, votre compte M Group est valide avec le role ${role}. Email: ${email}. Mot de passe temporaire: ${password}. Connectez-vous puis changez votre mot de passe.`
 
 // Transforme le format backend en profil directement exploitable par le dashboard.
 const toDashboardUser = (user) => {
@@ -246,6 +322,11 @@ function App() {
     return dashboardUser
   }
 
+  const handleCompanyUpdate = async (payload) => {
+    // Sauvegarde centralisee pour les parametres entreprise reserves a l'Admin.
+    return api.updateCompany(payload)
+  }
+
   const confirmLogout = async () => {
     setIsLogoutConfirmOpen(false)
     setShowLoginToast(false)
@@ -311,6 +392,7 @@ function App() {
       {currentView === 'dashboard' && activeUser && (
         <DashboardView
           lastLoginAt={lastLoginAt}
+          onCompanyUpdate={handleCompanyUpdate}
           onGoHome={goHome}
           onProfileUpdate={handleProfileUpdate}
           onRequestLogout={() => setIsLogoutConfirmOpen(true)}
@@ -1137,7 +1219,14 @@ function PendingApprovalPage({ onGoLogin }) {
   )
 }
 
-function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout, user }) {
+function DashboardView({
+  lastLoginAt,
+  onCompanyUpdate,
+  onGoHome,
+  onProfileUpdate,
+  onRequestLogout,
+  user,
+}) {
   const [now, setNow] = useState(() => new Date())
   const [activePanel, setActivePanel] = useState('overview')
   const [pendingUsers, setPendingUsers] = useState([])
@@ -1145,8 +1234,55 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
   const [approvalFeedback, setApprovalFeedback] = useState('')
   const [dashboardError, setDashboardError] = useState('')
   const [isApproving, setIsApproving] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [cancelUser, setCancelUser] = useState(null)
+  const [reviewUser, setReviewUser] = useState(null)
+  const [deliveryInfo, setDeliveryInfo] = useState(null)
+  const [soundEnabled, setSoundEnabled] = useState(true)
+  const [soundNotice, setSoundNotice] = useState('')
+  const audioContextRef = useRef(null)
+  const soundTimeoutRef = useRef(null)
+  const didLoadPendingRef = useRef(false)
+  const previousPendingCountRef = useRef(0)
   const roleKey = useMemo(() => user.roleValues.join('|'), [user.roleValues])
   const isAdmin = user.roleValues.includes('ADMIN')
+
+  const playAdminSound = useCallback(
+    (message = 'Action admin detectee') => {
+      if (!soundEnabled || typeof window === 'undefined') {
+        return
+      }
+
+      const AudioContext = window.AudioContext || window.webkitAudioContext
+
+      if (!AudioContext) {
+        setSoundNotice(message)
+        return
+      }
+
+      // Son court genere cote navigateur pour signaler une action importante a l'Admin.
+      const context = audioContextRef.current ?? new AudioContext()
+      audioContextRef.current = context
+      const start = context.currentTime
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(740, start)
+      oscillator.frequency.exponentialRampToValueAtTime(1240, start + 0.12)
+      gain.gain.setValueAtTime(0.001, start)
+      gain.gain.exponentialRampToValueAtTime(0.16, start + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.34)
+      oscillator.connect(gain).connect(context.destination)
+      oscillator.start(start)
+      oscillator.stop(start + 0.36)
+
+      setSoundNotice(message)
+      window.clearTimeout(soundTimeoutRef.current)
+      soundTimeoutRef.current = window.setTimeout(() => setSoundNotice(''), 4200)
+    },
+    [soundEnabled],
+  )
 
   // Horloge temps reel affichee dans l'en-tete du dashboard.
   useEffect(() => {
@@ -1183,8 +1319,32 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
     }
   }, [isAdmin, roleKey])
 
+  // Toute variation des demandes en attente peut produire une alerte sonore Admin.
+  useEffect(() => {
+    if (!isAdmin) {
+      return
+    }
+
+    if (!didLoadPendingRef.current) {
+      didLoadPendingRef.current = true
+      previousPendingCountRef.current = pendingUsers.length
+      return
+    }
+
+    if (pendingUsers.length !== previousPendingCountRef.current) {
+      const message =
+        pendingUsers.length > previousPendingCountRef.current
+          ? 'Nouvelle demande utilisateur'
+          : 'Demandes utilisateurs mises a jour'
+
+      playAdminSound(message)
+      previousPendingCountRef.current = pendingUsers.length
+    }
+  }, [isAdmin, pendingUsers.length, playAdminSound])
+
   const approveUser = async (pendingUser) => {
     const role = selectedRoles[pendingUser.id] ?? 'SECRETAIRE'
+    const roleLabel = availableRoles.find((item) => item.value === role)?.label ?? role
     setIsApproving(true)
     setDashboardError('')
     setApprovalFeedback('')
@@ -1192,14 +1352,46 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
     try {
       const result = await api.approveUser(pendingUser.id, { role })
       setPendingUsers((current) => current.filter((item) => item.id !== pendingUser.id))
+      setDeliveryInfo({
+        email: pendingUser.email,
+        fullName: `${pendingUser.lastName ?? ''} ${pendingUser.firstName ?? ''}`.trim(),
+        password: result.temporaryPassword,
+        phone: pendingUser.phone,
+        role: roleLabel,
+      })
       setApprovalFeedback(
-        `Compte valide pour ${pendingUser.email}. Mot de passe temporaire : ${result.temporaryPassword}`,
+        `Compte valide pour ${pendingUser.email}. Le mot de passe temporaire est pret a envoyer.`,
       )
+      playAdminSound('Compte utilisateur valide')
     } catch (error) {
       setDashboardError(error.message)
     } finally {
       setIsApproving(false)
     }
+  }
+
+  const cancelPendingUser = async (pendingUser) => {
+    setIsCancelling(true)
+    setDashboardError('')
+    setApprovalFeedback('')
+
+    try {
+      await api.disableUser(pendingUser.id)
+      setPendingUsers((current) => current.filter((item) => item.id !== pendingUser.id))
+      setApprovalFeedback(`Demande annulee pour ${pendingUser.email}.`)
+      playAdminSound('Demande utilisateur annulee')
+      setCancelUser(null)
+    } catch (error) {
+      setDashboardError(error.message)
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
+  const toggleSound = () => {
+    const nextValue = !soundEnabled
+    setSoundEnabled(nextValue)
+    setSoundNotice(nextValue ? 'Alertes sonores activees' : 'Alertes sonores desactivees')
   }
 
   return (
@@ -1222,22 +1414,54 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
             <span>▣</span>
             Overview
           </a>
-          <a href="#validation" onClick={() => setActivePanel('validation')}>
+          <a
+            className={activePanel === 'validation' ? 'active' : ''}
+            href="#validation"
+            onClick={() => setActivePanel('validation')}
+          >
             <span>●</span>
             Inscriptions
           </a>
-          <a href="#events">
+          <a
+            className={activePanel === 'events' ? 'active' : ''}
+            href="#events"
+            onClick={() => setActivePanel('events')}
+          >
             <span>◆</span>
             Evenements
           </a>
-          <a href="#finance">
+          <a
+            className={activePanel === 'finance' ? 'active' : ''}
+            href="#finance"
+            onClick={() => setActivePanel('finance')}
+          >
             <span>▥</span>
             Finances
           </a>
-          <a href="#team">
+          <a
+            className={activePanel === 'team' ? 'active' : ''}
+            href="#team"
+            onClick={() => setActivePanel('team')}
+          >
             <span>◉</span>
             Equipe
           </a>
+          <button
+            type="button"
+            className={activePanel === 'budget' ? 'active' : ''}
+            onClick={() => setActivePanel('budget')}
+          >
+            <Banknote size={17} aria-hidden="true" />
+            Budget
+          </button>
+          <button
+            type="button"
+            className={activePanel === 'alerts' ? 'active' : ''}
+            onClick={() => setActivePanel('alerts')}
+          >
+            <Bell size={17} aria-hidden="true" />
+            Alertes
+          </button>
           <button
             type="button"
             className={activePanel === 'settings' ? 'active' : ''}
@@ -1265,10 +1489,20 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
             <time className="time-chip" dateTime={now.toISOString()}>
               {now.toLocaleTimeString('fr-FR')}
             </time>
+            <button
+              type="button"
+              className="secondary-button bordered icon-text-button"
+              onClick={toggleSound}
+            >
+              {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
+              Alertes
+            </button>
             <button type="button" className="secondary-button bordered" onClick={onGoHome}>
+              <Home size={17} aria-hidden="true" />
               Accueil du site
             </button>
             <button type="button" className="danger-button" onClick={onRequestLogout}>
+              <LogOut size={17} aria-hidden="true" />
               Deconnexion
             </button>
           </div>
@@ -1290,12 +1524,45 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
         </section>
 
         {activePanel === 'settings' ? (
-          <SettingsPanel user={user} onProfileUpdate={onProfileUpdate} />
+          <SettingsPanel
+            user={user}
+            onAdminEvent={playAdminSound}
+            onCompanyUpdate={onCompanyUpdate}
+            onProfileUpdate={onProfileUpdate}
+            onRequestLogout={onRequestLogout}
+          />
+        ) : activePanel === 'validation' ? (
+          <ValidationPage
+            dashboardError={dashboardError}
+            isApproving={isApproving}
+            isCancelling={isCancelling}
+            onApprove={approveUser}
+            onCancelRequest={setCancelUser}
+            onReview={setReviewUser}
+            pendingUsers={pendingUsers}
+            selectedRoles={selectedRoles}
+            setSelectedRoles={setSelectedRoles}
+            successMessage={approvalFeedback}
+          />
+        ) : activePanel === 'events' ? (
+          <EventsPage />
+        ) : activePanel === 'finance' ? (
+          <FinancePage />
+        ) : activePanel === 'team' ? (
+          <TeamPage pendingCount={pendingUsers.length} />
+        ) : activePanel === 'budget' ? (
+          <BudgetPage />
+        ) : activePanel === 'alerts' ? (
+          <AlertsPage
+            onTestSound={() => playAdminSound('Test alerte sonore')}
+            onToggleSound={toggleSound}
+            soundEnabled={soundEnabled}
+          />
         ) : (
           <>
         <div id="dashboard" className="dashboard-hero admin-dashboard-title">
           <p className="eyebrow">Dashboard {user.role}</p>
-          <h1>Vue generale de pilotage.</h1>
+          <h1>Pilotage global.</h1>
           <p>
             Suivez les indicateurs, les inscriptions et les actions prioritaires de M Group depuis
             un seul espace.
@@ -1352,6 +1619,8 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
           </article>
         </section>
 
+        <DashboardInsightBoard pendingCount={pendingUsers.length} onOpenPanel={setActivePanel} />
+
         {isAdmin && (
           <section id="validation" className="approval-panel" aria-label="Demandes d'inscription">
             <div>
@@ -1387,14 +1656,31 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
                       </option>
                     ))}
                   </select>
-                  <button
-                    type="button"
-                    className="primary-button"
-                    disabled={isApproving}
-                    onClick={() => approveUser(pendingUser)}
-                  >
-                    Confirmer
-                  </button>
+                  <div className="approval-actions">
+                    <button
+                      type="button"
+                      className="secondary-button bordered"
+                      onClick={() => setReviewUser(pendingUser)}
+                    >
+                      Voir
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={isApproving}
+                      onClick={() => approveUser(pendingUser)}
+                    >
+                      Confirmer
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      disabled={isCancelling}
+                      onClick={() => setCancelUser(pendingUser)}
+                    >
+                      Annuler
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -1403,114 +1689,1026 @@ function DashboardView({ lastLoginAt, onGoHome, onProfileUpdate, onRequestLogout
           </>
         )}
       </section>
+
+      {reviewUser && (
+        <RegistrationReviewModal user={reviewUser} onClose={() => setReviewUser(null)} />
+      )}
+
+      {cancelUser && (
+        <CancelUserModal
+          isBusy={isCancelling}
+          onCancel={() => setCancelUser(null)}
+          onConfirm={() => cancelPendingUser(cancelUser)}
+          user={cancelUser}
+        />
+      )}
+
+      {deliveryInfo && (
+        <PasswordDeliveryPanel info={deliveryInfo} onClose={() => setDeliveryInfo(null)} />
+      )}
+
+      {soundNotice && (
+        <div className="sound-toast" role="status">
+          <Bell size={18} aria-hidden="true" />
+          <span>{soundNotice}</span>
+        </div>
+      )}
     </section>
   )
 }
 
-function SettingsPanel({ onProfileUpdate, user }) {
-  const [notice, setNotice] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
+function DashboardInsightBoard({ onOpenPanel, pendingCount }) {
+  return (
+    <section className="dashboard-insights" aria-label="Synthese globale">
+      <article className="visual-panel finance-summary">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Budget FCFA</p>
+            <strong>{formatFcfa(18500000)}</strong>
+          </div>
+          <Wallet size={26} aria-hidden="true" />
+        </div>
+        <div className="stacked-budget" aria-hidden="true">
+          {financeRows.map((item) => (
+            <span key={item.label} style={{ '--segment': `${item.percent}%` }}></span>
+          ))}
+        </div>
+        <ul className="compact-list">
+          {financeRows.slice(0, 3).map((item) => (
+            <li key={item.label}>
+              <span>{item.label}</span>
+              <strong>{formatFcfa(item.value)}</strong>
+            </li>
+          ))}
+        </ul>
+      </article>
+
+      <article className="visual-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Operations</p>
+            <strong>Vue instantanee</strong>
+          </div>
+          <Activity size={26} aria-hidden="true" />
+        </div>
+        <div className="ops-grid">
+          <button type="button" onClick={() => onOpenPanel('validation')}>
+            <UserPlus size={20} />
+            <strong>{pendingCount}</strong>
+            <span>inscriptions</span>
+          </button>
+          <button type="button" onClick={() => onOpenPanel('events')}>
+            <CalendarDays size={20} />
+            <strong>{eventRows.length}</strong>
+            <span>evenements</span>
+          </button>
+          <button type="button" onClick={() => onOpenPanel('alerts')}>
+            <Bell size={20} />
+            <strong>{alertRows.length}</strong>
+            <span>alertes</span>
+          </button>
+        </div>
+      </article>
+    </section>
+  )
+}
+
+function ValidationPage({
+  dashboardError,
+  isApproving,
+  isCancelling,
+  onApprove,
+  onCancelRequest,
+  onReview,
+  pendingUsers,
+  selectedRoles,
+  setSelectedRoles,
+  successMessage,
+}) {
+  return (
+    <section className="module-page" aria-label="Page inscriptions">
+      <ModuleHeader
+        description="Controlez les demandes, verifiez les informations, choisissez un role et communiquez le mot de passe temporaire."
+        icon={ClipboardCheck}
+        label="Validation admin"
+        title="Inscriptions."
+      />
+
+      <section id="validation" className="approval-panel" aria-label="Demandes d'inscription">
+        <div>
+          <p className="eyebrow">Activation des comptes</p>
+          <h2>Attribuer un role avant activation.</h2>
+        </div>
+
+        {dashboardError && <p className="auth-notice error">{dashboardError}</p>}
+        {successMessage && <p className="auth-notice success">{successMessage}</p>}
+
+        {pendingUsers.length === 0 ? (
+          <p className="approval-empty">Aucune demande d'inscription en attente.</p>
+        ) : (
+          pendingUsers.map((pendingUser) => (
+            <div className="approval-row" key={pendingUser.id}>
+              <div>
+                <strong>{`${pendingUser.lastName} ${pendingUser.firstName}`}</strong>
+                <span>{pendingUser.email}</span>
+              </div>
+              <select
+                aria-label="Role a attribuer"
+                value={selectedRoles[pendingUser.id] ?? 'SECRETAIRE'}
+                onChange={(event) =>
+                  setSelectedRoles((current) => ({
+                    ...current,
+                    [pendingUser.id]: event.target.value,
+                  }))
+                }
+              >
+                {availableRoles.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+              <div className="approval-actions">
+                <button
+                  type="button"
+                  className="secondary-button bordered"
+                  onClick={() => onReview(pendingUser)}
+                >
+                  <Eye size={16} />
+                  Voir
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={isApproving}
+                  onClick={() => onApprove(pendingUser)}
+                >
+                  <CheckCircle2 size={16} />
+                  Confirmer
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={isCancelling}
+                  onClick={() => onCancelRequest(pendingUser)}
+                >
+                  <XCircle size={16} />
+                  Annuler
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </section>
+    </section>
+  )
+}
+
+function ModuleHeader({ description, icon: Icon, label, title }) {
+  return (
+    <div className="module-header">
+      <div className="module-icon">
+        <Icon size={28} aria-hidden="true" />
+      </div>
+      <div>
+        <p className="eyebrow">{label}</p>
+        <h1>{title}</h1>
+        <p>{description}</p>
+      </div>
+    </div>
+  )
+}
+
+function EventsPage() {
+  return (
+    <section className="module-page">
+      <ModuleHeader
+        description="Planifiez les prestations, suivez les statuts et gardez une lecture rapide des budgets par evenement."
+        icon={CalendarDays}
+        label="Evenementiel"
+        title="Evenements."
+      />
+      <div className="module-grid">
+        {eventRows.map((event) => (
+          <article className="module-card" key={event.title}>
+            <span className="card-icon"><CalendarDays size={20} /></span>
+            <h3>{event.title}</h3>
+            <p>{event.date}</p>
+            <strong>{formatFcfa(event.budget)}</strong>
+            <small>{event.status}</small>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function FinancePage() {
+  return (
+    <section className="module-page">
+      <ModuleHeader
+        description="Suivez les revenus, les depenses et les validations financieres avec une lecture directe en FCFA."
+        icon={Wallet}
+        label="Controle financier"
+        title="Finance."
+      />
+      <section className="analytics-grid">
+        <article className="chart-panel wide">
+          <div className="panel-heading">
+            <strong>Depenses par poste</strong>
+            <span>Total {formatFcfa(21300000)}</span>
+          </div>
+          <div className="horizontal-bars">
+            {financeRows.map((row) => (
+              <div key={row.label}>
+                <span>{row.label}</span>
+                <strong>{formatFcfa(row.value)}</strong>
+                <i style={{ '--bar-width': `${row.percent}%` }}></i>
+              </div>
+            ))}
+          </div>
+        </article>
+        <article className="chart-panel compact">
+          <div className="panel-heading">
+            <strong>Repartition</strong>
+            <span>Budget</span>
+          </div>
+          <div className="donut-chart budget" aria-hidden="true"></div>
+          <ul className="chart-legend">
+            <li>Production</li>
+            <li>Technique</li>
+            <li>Communication</li>
+          </ul>
+        </article>
+      </section>
+    </section>
+  )
+}
+
+function TeamPage({ pendingCount }) {
+  return (
+    <section className="module-page">
+      <ModuleHeader
+        description="Controlez la charge des equipes, les roles et les validations RH."
+        icon={Users}
+        label="Equipe"
+        title="Equipe."
+      />
+      <div className="module-grid">
+        {teamRows.map((team) => (
+          <article className="module-card" key={team.role}>
+            <span className="card-icon"><Users size={20} /></span>
+            <h3>{team.role}</h3>
+            <p>{team.members} membre(s)</p>
+            <div className="progress-line"><span style={{ '--progress': `${team.load}%` }}></span></div>
+            <small>Charge {team.load}%</small>
+          </article>
+        ))}
+        <article className="module-card highlight">
+          <span className="card-icon"><UserPlus size={20} /></span>
+          <h3>Demandes a traiter</h3>
+          <strong>{pendingCount}</strong>
+          <p>inscription(s) en attente</p>
+        </article>
+      </div>
+    </section>
+  )
+}
+
+function BudgetPage() {
+  return (
+    <section className="module-page">
+      <ModuleHeader
+        description="Visualisez les enveloppes, les engagements et les budgets a valider."
+        icon={Banknote}
+        label="Budget"
+        title="Budget."
+      />
+      <div className="budget-grid">
+        <article className="visual-panel">
+          <p className="eyebrow">Enveloppe annuelle</p>
+          <strong className="big-money">{formatFcfa(120000000)}</strong>
+          <div className="budget-meter"><span style={{ '--progress': '64%' }}></span></div>
+          <p>64% consommes sur les operations confirmees.</p>
+        </article>
+        <article className="visual-panel">
+          <p className="eyebrow">A valider</p>
+          <strong className="big-money">{formatFcfa(7400000)}</strong>
+          <ul className="compact-list">
+            <li><span>Technique</span><strong>{formatFcfa(3200000)}</strong></li>
+            <li><span>Communication</span><strong>{formatFcfa(2100000)}</strong></li>
+            <li><span>Logistique</span><strong>{formatFcfa(2100000)}</strong></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  )
+}
+
+function AlertsPage({ onTestSound, onToggleSound, soundEnabled }) {
+  return (
+    <section className="module-page">
+      <ModuleHeader
+        description="Centralisez les alertes importantes et testez la notification sonore du dashboard Admin."
+        icon={Bell}
+        label="Alertes"
+        title="Alertes."
+      />
+      <div className="alert-toolbar">
+        <button type="button" className="secondary-button bordered" onClick={onToggleSound}>
+          {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
+          {soundEnabled ? 'Desactiver le son' : 'Activer le son'}
+        </button>
+        <button type="button" className="primary-button" onClick={onTestSound}>
+          <Bell size={17} />
+          Tester l'alerte
+        </button>
+      </div>
+      <div className="alert-list">
+        {alertRows.map((alert) => (
+          <article className="alert-card" key={alert.title}>
+            <AlertTriangle size={22} aria-hidden="true" />
+            <div>
+              <strong>{alert.title}</strong>
+              <span>{alert.time}</span>
+            </div>
+            <em>{alert.level}</em>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function PasswordDeliveryPanel({ info, onClose }) {
+  const [copyNotice, setCopyNotice] = useState('')
+  const message = buildTemporaryPasswordMessage(info)
+  const phone = normalizePhone(info.phone)
+  const whatsappUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : ''
+  const smsUrl = phone ? `sms:${phone}?&body=${encodeURIComponent(message)}` : ''
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+    info.email,
+  )}&su=${encodeURIComponent('Votre acces M Group')}&body=${encodeURIComponent(message)}`
+
+  const copyMessage = async () => {
+    await navigator.clipboard.writeText(message)
+    setCopyNotice('Message copie.')
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="confirm-panel delivery-panel" aria-label="Envoi du mot de passe">
+        <button type="button" className="close-button" aria-label="Fermer" onClick={onClose}>
+          x
+        </button>
+        <div className="setup-heading success">
+          <p className="eyebrow">Compte valide</p>
+          <h2>Envoyer le mot de passe temporaire.</h2>
+          <p>{info.email}</p>
+        </div>
+        <div className="temporary-password-box">
+          <span>Mot de passe temporaire</span>
+          <strong>{info.password}</strong>
+        </div>
+        <div className="delivery-actions">
+          <a className={`secondary-button bordered ${phone ? '' : 'disabled'}`} href={whatsappUrl} target="_blank" rel="noreferrer">
+            <MessageCircle size={17} />
+            WhatsApp
+          </a>
+          <a className={`secondary-button bordered ${phone ? '' : 'disabled'}`} href={smsUrl}>
+            <Smartphone size={17} />
+            SMS
+          </a>
+          <a className="secondary-button bordered" href={gmailUrl} target="_blank" rel="noreferrer">
+            <Mail size={17} />
+            Gmail
+          </a>
+          <button type="button" className="primary-button" onClick={copyMessage}>
+            <Copy size={17} />
+            Copier
+          </button>
+        </div>
+        {copyNotice && <p className="auth-notice success">{copyNotice}</p>}
+        {!phone && <p className="form-note">Aucun contact valide : WhatsApp et SMS sont indisponibles.</p>}
+      </section>
+    </div>
+  )
+}
+
+function CancelUserModal({ isBusy, onCancel, onConfirm, user }) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="confirm-panel" aria-label="Confirmation annulation">
+        {/* Confirmation propre pour remplacer window.confirm et garder une UX coherente. */}
+        <div className="setup-heading success">
+          <p className="eyebrow">Annulation inscription</p>
+          <h2>Annuler cette demande ?</h2>
+          <p>
+            Le compte de {user.email} sera refuse et ne pourra pas se connecter sans nouvelle
+            intervention admin.
+          </p>
+        </div>
+        <div className="choice-actions">
+          <button type="button" className="secondary-button bordered large" onClick={onCancel}>
+            Retour
+          </button>
+          <button type="button" className="danger-button large" disabled={isBusy} onClick={onConfirm}>
+            {isBusy ? 'Annulation...' : 'Confirmer annulation'}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function RegistrationReviewModal({ onClose, user }) {
+  const checklist = getRegistrationChecklist(user)
+  const completedCount = checklist.filter((item) => String(item.value ?? '').trim()).length
+  const isComplete = completedCount === checklist.length
+
+  const displayValue = (item) => {
+    if (!item.value) {
+      return 'Manquant'
+    }
+
+    if (item.label === 'Photo') {
+      return 'Photo ajoutee'
+    }
+
+    return item.value
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="confirm-panel review-panel" aria-label="Verification inscription">
+        {/* Revue rapide avant validation : l'Admin voit les donnees remplies et manquantes. */}
+        <button type="button" className="close-button" aria-label="Fermer" onClick={onClose}>
+          x
+        </button>
+        <div className="review-heading">
+          <div className="review-avatar">
+            {user.photoUrl ? <img src={user.photoUrl} alt="" /> : <span>?</span>}
+          </div>
+          <div>
+            <p className="eyebrow">Verification inscription</p>
+            <h2>{`${user.lastName ?? ''} ${user.firstName ?? ''}`.trim() || user.email}</h2>
+            <span className={`review-status ${isComplete ? 'success' : 'warning'}`}>
+              {completedCount}/{checklist.length} informations remplies
+            </span>
+          </div>
+        </div>
+
+        <ul className="review-list">
+          {checklist.map((item) => {
+            const hasValue = Boolean(String(item.value ?? '').trim())
+
+            return (
+              <li key={item.label} className={hasValue ? 'complete' : 'missing'}>
+                <span>{item.label}</span>
+                <strong>{displayValue(item)}</strong>
+              </li>
+            )
+          })}
+        </ul>
+
+        <div className="settings-actions">
+          <button type="button" className="primary-button" onClick={onClose}>
+            Fermer
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onRequestLogout, user }) {
+  const [activeTab, setActiveTab] = useState('profile')
+  const [notice, setNotice] = useState({ type: '', text: '' })
+  const [savingTarget, setSavingTarget] = useState('')
   const [previewUrl, setPreviewUrl] = useState(user.photoUrl ?? '')
+  const [company, setCompany] = useState(null)
+  const [companyError, setCompanyError] = useState('')
+  const [companyPreviewUrl, setCompanyPreviewUrl] = useState('')
+  const [sessions, setSessions] = useState([])
+  const [loginHistory, setLoginHistory] = useState([])
+  const [isSecurityLoading, setIsSecurityLoading] = useState(false)
+  const isAdmin = user.roleValues.includes('ADMIN')
+
+  useEffect(() => {
+    if (activeTab !== 'security') {
+      return undefined
+    }
+
+    let isMounted = true
+
+    // Les sessions et l'historique sont charges uniquement quand l'onglet Securite est ouvert.
+    Promise.all([api.getSessions(), api.getLoginHistory()])
+      .then(([nextSessions, nextHistory]) => {
+        if (isMounted) {
+          setSessions(nextSessions)
+          setLoginHistory(nextHistory)
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice({ type: 'error', text: error.message })
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsSecurityLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab !== 'company' || !isAdmin || company) {
+      return undefined
+    }
+
+    let isMounted = true
+
+    // Les informations entreprise sont reservees a l'Admin et viennent de PostgreSQL.
+    api
+      .getCompany()
+      .then((nextCompany) => {
+        if (isMounted) {
+          setCompany(nextCompany)
+          setCompanyError('')
+          setCompanyPreviewUrl(nextCompany.photoUrl ?? '')
+          setNotice({ type: '', text: '' })
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setCompanyError(error.message)
+          setNotice({ type: 'error', text: error.message })
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [activeTab, company, isAdmin])
+
+  const showNotice = (type, text) => {
+    setNotice({ type, text })
+  }
+
+  const selectSettingsTab = (tab) => {
+    if (tab === activeTab) {
+      return
+    }
+
+    setActiveTab(tab)
+    showNotice('', '')
+
+    if (tab === 'security') {
+      setIsSecurityLoading(true)
+    }
+
+    if (tab === 'company') {
+      setCompanyError('')
+    }
+  }
+
+  const retryCompanyLoad = async () => {
+    setCompanyError('')
+    showNotice('', '')
+
+    try {
+      const nextCompany = await api.getCompany()
+      setCompany(nextCompany)
+      setCompanyPreviewUrl(nextCompany.photoUrl ?? '')
+    } catch (error) {
+      setCompanyError(error.message)
+      showNotice('error', error.message)
+    }
+  }
 
   const saveProfile = async (event) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    const photoUrl = await fileToDataUrl(formData.get('photo'))
+    const email = getFormValue(formData, 'email')
+    const confirmEmail = getFormValue(formData, 'confirmEmail')
 
-    setIsSaving(true)
-    setNotice('')
+    if (email !== confirmEmail) {
+      showNotice('error', 'La confirmation email ne correspond pas.')
+      return
+    }
+
+    setSavingTarget('profile')
+    showNotice('', '')
 
     try {
+      const photoUrl = await fileToDataUrl(formData.get('photo'))
       const updated = await onProfileUpdate({
         firstName: getFormValue(formData, 'firstName'),
         lastName: getFormValue(formData, 'lastName'),
         address: getFormValue(formData, 'address'),
-        email: getFormValue(formData, 'email'),
+        email,
         phone: getFormValue(formData, 'phone'),
         photoUrl: photoUrl || user.photoUrl,
       })
 
       setPreviewUrl(updated.photoUrl ?? '')
-      setNotice('Profil mis a jour avec succes.')
+      showNotice('success', 'Profil mis a jour avec succes.')
+      onAdminEvent?.('Profil admin mis a jour')
     } catch (error) {
-      setNotice(error.message)
+      showNotice('error', error.message)
     } finally {
-      setIsSaving(false)
+      setSavingTarget('')
+    }
+  }
+
+  const savePassword = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    const newPassword = getFormValue(formData, 'newPassword')
+    const confirmPassword = getFormValue(formData, 'confirmPassword')
+
+    if (newPassword !== confirmPassword) {
+      showNotice('error', 'Les deux nouveaux mots de passe ne correspondent pas.')
+      return
+    }
+
+    setSavingTarget('password')
+    showNotice('', '')
+
+    try {
+      await api.changePassword({
+        currentPassword: getFormValue(formData, 'currentPassword'),
+        newPassword,
+      })
+      event.currentTarget.reset()
+      showNotice('success', 'Mot de passe modifie avec succes.')
+      onAdminEvent?.('Mot de passe modifie')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
+  const revokeAllSessions = async () => {
+    if (!window.confirm('Revoquer toutes les sessions actives de ce compte ?')) {
+      return
+    }
+
+    setSavingTarget('sessions')
+    showNotice('', '')
+
+    try {
+      const result = await api.logoutAllDevices()
+      const nextSessions = await api.getSessions()
+      setSessions(nextSessions)
+      showNotice('success', `${result.revokedSessions} session(s) revoquee(s).`)
+      onAdminEvent?.('Sessions revoquees')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
+  const saveCompany = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    setSavingTarget('company')
+    showNotice('', '')
+
+    try {
+      const photoUrl = await fileToDataUrl(formData.get('photo'))
+      const updatedCompany = await onCompanyUpdate({
+        name: getFormValue(formData, 'name'),
+        legalName: getFormValue(formData, 'legalName'),
+        address: getFormValue(formData, 'address'),
+        email: getFormValue(formData, 'email'),
+        phone: getFormValue(formData, 'phone'),
+        photoUrl: photoUrl || company?.photoUrl,
+        taxInfo: getFormValue(formData, 'taxInfo'),
+        documentFooter: getFormValue(formData, 'documentFooter'),
+      })
+
+      setCompany(updatedCompany)
+      setCompanyPreviewUrl(updatedCompany.photoUrl ?? '')
+      showNotice('success', 'Parametres entreprise mis a jour.')
+      onAdminEvent?.('Entreprise mise a jour')
+    } catch (error) {
+      showNotice('error', error.message)
+    } finally {
+      setSavingTarget('')
     }
   }
 
   return (
     <section className="settings-panel" aria-label="Parametres du compte">
-      {/* Parametres du profil connecte : les changements sont persistants en base. */}
+      {/* En-tete commun des parametres Admin : un onglet controle chaque famille de reglage. */}
       <div className="dashboard-hero admin-dashboard-title">
-        <p className="eyebrow">Parametres</p>
-        <h1>Mon profil.</h1>
+        <p className="eyebrow">Parametres Admin</p>
+        <h1>Compte, securite et entreprise.</h1>
         <p>
-          Mettez a jour vos informations personnelles. Le role reste gere par
-          l'administrateur.
+          Mettez a jour vos informations, controlez les sessions actives et gardez les donnees
+          administratives de M Group a jour.
         </p>
       </div>
 
-      <form className="settings-card" onSubmit={saveProfile}>
-        {notice && (
-          <p className={`auth-notice ${notice.includes('succes') ? 'success' : 'error'}`}>
-            {notice}
-          </p>
-        )}
-
-        <div className="settings-profile-row">
-          <div className="settings-avatar">
-            {previewUrl ? <img src={previewUrl} alt="" /> : <span>{user.initials}</span>}
-          </div>
-          <label className="settings-photo-field">
-            Photo de profil
-            <input
-              name="photo"
-              type="file"
-              accept="image/*"
-              onChange={async (event) => {
-                const nextPreview = await fileToDataUrl(event.target.files?.[0])
-                if (nextPreview) {
-                  setPreviewUrl(nextPreview)
-                }
-              }}
-            />
-          </label>
-        </div>
-
-        <div className="form-grid">
-          <label>
-            Nom
-            <input name="lastName" type="text" defaultValue={user.lastName ?? ''} required />
-          </label>
-          <label>
-            Prenom(s)
-            <input name="firstName" type="text" defaultValue={user.firstName ?? ''} required />
-          </label>
-          <label>
-            Adresse
-            <input name="address" type="text" defaultValue={user.address ?? ''} />
-          </label>
-          <label>
-            Contact
-            <input name="phone" type="tel" defaultValue={user.phone ?? ''} />
-          </label>
-          <label>
-            Email
-            <input name="email" type="email" defaultValue={user.email ?? ''} required />
-          </label>
-          <label>
-            Role
-            <input type="text" value={user.role} disabled />
-          </label>
-        </div>
-
-        <div className="settings-actions">
-          <button type="submit" className="primary-button" disabled={isSaving}>
-            {isSaving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+      <div className="settings-tabs" role="tablist" aria-label="Categories de parametres">
+        <button
+          type="button"
+          className={activeTab === 'profile' ? 'active' : ''}
+          onClick={() => selectSettingsTab('profile')}
+        >
+          Profil utilisateur
+        </button>
+        <button
+          type="button"
+          className={activeTab === 'security' ? 'active' : ''}
+          onClick={() => selectSettingsTab('security')}
+        >
+          Securite du compte
+        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            className={activeTab === 'company' ? 'active' : ''}
+            onClick={() => selectSettingsTab('company')}
+          >
+            Parametres entreprise
           </button>
+        )}
+      </div>
+
+      {notice.text && <p className={`auth-notice ${notice.type}`}>{notice.text}</p>}
+
+      {activeTab === 'profile' && (
+        <form className="settings-card" onSubmit={saveProfile}>
+          {/* Profil personnel : l'email doit etre confirme avant d'etre envoye au backend. */}
+          <div className="settings-profile-row">
+            <div className="settings-avatar">
+              {previewUrl ? <img src={previewUrl} alt="" /> : <span>{user.initials}</span>}
+            </div>
+            <label className="settings-photo-field">
+              Photo de profil
+              <input
+                name="photo"
+                type="file"
+                accept="image/*"
+                onChange={async (event) => {
+                  const nextPreview = await fileToDataUrl(event.target.files?.[0])
+                  if (nextPreview) {
+                    setPreviewUrl(nextPreview)
+                  }
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="settings-meta-grid">
+            <article>
+              <span>Role actuel</span>
+              <strong>{user.role}</strong>
+            </article>
+            <article>
+              <span>Derniere connexion</span>
+              <strong>
+                {user.lastLoginAt ? formatDateTime(new Date(user.lastLoginAt)) : 'Non disponible'}
+              </strong>
+            </article>
+          </div>
+
+          <div className="form-grid">
+            <label>
+              Nom
+              <input name="lastName" type="text" defaultValue={user.lastName ?? ''} required />
+            </label>
+            <label>
+              Prenom(s)
+              <input name="firstName" type="text" defaultValue={user.firstName ?? ''} required />
+            </label>
+            <label>
+              Adresse
+              <input name="address" type="text" defaultValue={user.address ?? ''} />
+            </label>
+            <label>
+              Contact
+              <input name="phone" type="tel" defaultValue={user.phone ?? ''} />
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" defaultValue={user.email ?? ''} required />
+            </label>
+            <label>
+              Confirmer l'email
+              <input name="confirmEmail" type="email" defaultValue={user.email ?? ''} required />
+            </label>
+          </div>
+
+          <div className="settings-actions">
+            <button type="submit" className="primary-button" disabled={savingTarget === 'profile'}>
+              {savingTarget === 'profile' ? 'Enregistrement...' : 'Enregistrer le profil'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {activeTab === 'security' && (
+        <div className="settings-card">
+          {/* Securite : les actions critiques restent separees des champs de profil. */}
+          <form className="settings-section" onSubmit={savePassword}>
+            <div>
+              <p className="eyebrow">Mot de passe</p>
+              <h2>Changer le mot de passe.</h2>
+            </div>
+            <div className="form-grid">
+              <label>
+                Mot de passe actuel
+                <input name="currentPassword" type="password" minLength="8" required />
+              </label>
+              <label>
+                Nouveau mot de passe
+                <input name="newPassword" type="password" minLength="10" required />
+              </label>
+              <label>
+                Confirmer le nouveau mot de passe
+                <input name="confirmPassword" type="password" minLength="10" required />
+              </label>
+            </div>
+            <div className="settings-actions">
+              <button type="submit" className="primary-button" disabled={savingTarget === 'password'}>
+                {savingTarget === 'password' ? 'Modification...' : 'Modifier le mot de passe'}
+              </button>
+            </div>
+          </form>
+
+          <div className="settings-section-grid">
+            <article className="settings-muted-panel">
+              <p className="eyebrow">Sessions actives</p>
+              <h3>Gestion des appareils.</h3>
+              <p>
+                Revoquez les sessions ouvertes sur les autres navigateurs si vous suspectez un
+                acces non autorise.
+              </p>
+              <div className="settings-actions left">
+                <button type="button" className="secondary-button bordered" onClick={onRequestLogout}>
+                  Deconnecter cette session
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={savingTarget === 'sessions'}
+                  onClick={revokeAllSessions}
+                >
+                  {savingTarget === 'sessions' ? 'Revocation...' : 'Tout deconnecter'}
+                </button>
+              </div>
+            </article>
+
+            <article className="settings-muted-panel">
+              <p className="eyebrow">Protection avancee</p>
+              <h3>Authentification a deux facteurs.</h3>
+              <p>
+                Le branchement 2FA sera active plus tard avec un vrai fournisseur OTP ou email.
+              </p>
+              <label className="settings-toggle disabled">
+                <input type="checkbox" disabled />
+                Activer la 2FA plus tard
+              </label>
+              <label className="settings-toggle disabled">
+                <input type="checkbox" checked disabled readOnly />
+                Notifier les connexions suspectes
+              </label>
+            </article>
+          </div>
+
+          <div className="settings-section-grid">
+            <article className="settings-muted-panel">
+              <p className="eyebrow">Sessions recentes</p>
+              <h3>Etat des tokens.</h3>
+              {isSecurityLoading ? (
+                <p>Chargement des sessions...</p>
+              ) : (
+                <ul className="settings-list">
+                  {sessions.map((session) => (
+                    <li key={session.id}>
+                      <span>{formatDateTime(new Date(session.createdAt))}</span>
+                      <strong>{session.isActive ? 'Active' : 'Expiree ou fermee'}</strong>
+                    </li>
+                  ))}
+                  {sessions.length === 0 && <li>Aucune session recente.</li>}
+                </ul>
+              )}
+            </article>
+
+            <article className="settings-muted-panel">
+              <p className="eyebrow">Historique</p>
+              <h3>Dernieres actions securite.</h3>
+              {isSecurityLoading ? (
+                <p>Chargement de l'historique...</p>
+              ) : (
+                <ul className="settings-list">
+                  {loginHistory.map((event) => (
+                    <li key={event.id}>
+                      <span>{formatDateTime(new Date(event.createdAt))}</span>
+                      <strong>{auditActionLabel(event.action)}</strong>
+                    </li>
+                  ))}
+                  {loginHistory.length === 0 && <li>Aucun historique disponible.</li>}
+                </ul>
+              )}
+            </article>
+          </div>
         </div>
-      </form>
+      )}
+
+      {activeTab === 'company' && isAdmin && (
+        <form className="settings-card" key={company?.id ?? 'company-loading'} onSubmit={saveCompany}>
+          {/* Parametres entreprise : cette zone est visible uniquement pour le role Admin. */}
+          {!company ? (
+            <div className="approval-empty">
+              <p>
+                {companyError
+                  ? "Impossible de charger les informations entreprise."
+                  : 'Chargement des informations entreprise...'}
+              </p>
+              {companyError && (
+                <button type="button" className="secondary-button bordered" onClick={retryCompanyLoad}>
+                  Reessayer
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="settings-profile-row">
+                <div className="company-logo-preview">
+                  {companyPreviewUrl ? <img src={companyPreviewUrl} alt="" /> : <span>MG</span>}
+                </div>
+                <label className="settings-photo-field">
+                  Logo de l'entreprise
+                  <input
+                    name="photo"
+                    type="file"
+                    accept="image/*"
+                    onChange={async (event) => {
+                      const nextPreview = await fileToDataUrl(event.target.files?.[0])
+                      if (nextPreview) {
+                        setCompanyPreviewUrl(nextPreview)
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  Nom de l'entreprise
+                  <input name="name" type="text" defaultValue={company.name ?? ''} required />
+                </label>
+                <label>
+                  Raison sociale
+                  <input name="legalName" type="text" defaultValue={company.legalName ?? ''} required />
+                </label>
+                <label>
+                  Adresse
+                  <input name="address" type="text" defaultValue={company.address ?? ''} required />
+                </label>
+                <label>
+                  Contacts
+                  <input name="phone" type="tel" defaultValue={company.phone ?? ''} required />
+                </label>
+                <label>
+                  Email officiel
+                  <input name="email" type="email" defaultValue={company.email ?? ''} required />
+                </label>
+                <label>
+                  Informations fiscales ou administratives
+                  <input name="taxInfo" type="text" defaultValue={company.taxInfo ?? ''} />
+                </label>
+                <label className="wide-field">
+                  Signature/footer pour documents
+                  <input
+                    name="documentFooter"
+                    type="text"
+                    defaultValue={company.documentFooter ?? ''}
+                    placeholder="Ex: M Group - Direction generale - Abidjan"
+                  />
+                </label>
+              </div>
+
+              <div className="settings-actions">
+                <button type="submit" className="primary-button" disabled={savingTarget === 'company'}>
+                  {savingTarget === 'company' ? 'Enregistrement...' : "Enregistrer l'entreprise"}
+                </button>
+              </div>
+            </>
+          )}
+        </form>
+      )}
     </section>
   )
 }

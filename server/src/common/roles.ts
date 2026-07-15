@@ -26,4 +26,14 @@ export const DEFAULT_ROLES: Array<{ name: RoleName; label: string; description: 
     label: 'Commercial',
     description: 'Suivi commercial, clients, offres, partenaires et opportunites.',
   },
+  {
+    name: RoleName.CLIENT,
+    label: 'Client',
+    description: 'Acces client pour suivre les demandes, prestations et documents partages.',
+  },
+  {
+    name: RoleName.AUTRE,
+    label: 'Autre',
+    description: 'Profil polyvalent pour les collaborateurs ou intervenants non classes.',
+  },
 ];

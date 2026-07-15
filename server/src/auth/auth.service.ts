@@ -161,11 +161,67 @@ export class AuthService {
           where: { id: storedToken.id },
           data: { revokedAt: new Date() },
         });
+        await this.audit(storedToken.userId, AuditAction.LOGOUT, {}, { scope: 'current-session' });
         break;
       }
     }
 
     return { message: 'Logged out.' };
+  }
+
+  async logoutAll(user: AuthenticatedUser) {
+    // Revoque tous les refresh tokens : les autres navigateurs devront se reconnecter.
+    const result = await this.prisma.refreshToken.updateMany({
+      where: {
+        userId: user.sub,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
+    });
+
+    await this.audit(user.sub, AuditAction.LOGOUT, {}, { scope: 'all-devices' });
+
+    return {
+      message: 'All sessions have been revoked.',
+      revokedSessions: result.count,
+    };
+  }
+
+  async sessions(user: AuthenticatedUser) {
+    const sessions = await this.prisma.refreshToken.findMany({
+      where: { userId: user.sub },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    const now = new Date();
+
+    // Le hash du token n'est jamais expose ; l'interface ne voit que l'etat de la session.
+    return sessions.map((session) => ({
+      id: session.id,
+      createdAt: session.createdAt,
+      expiresAt: session.expiresAt,
+      revokedAt: session.revokedAt,
+      isActive: !session.revokedAt && session.expiresAt > now,
+    }));
+  }
+
+  async loginHistory(user: AuthenticatedUser) {
+    // Historique centre sur les evenements de connexion/securite du compte connecte.
+    return this.prisma.loginAuditLog.findMany({
+      where: {
+        userId: user.sub,
+        action: {
+          in: [
+            AuditAction.LOGIN_SUCCESS,
+            AuditAction.LOGOUT,
+            AuditAction.PASSWORD_CHANGED,
+            AuditAction.PROFILE_UPDATED,
+          ],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
   }
 
   async changePassword(user: AuthenticatedUser, dto: ChangePasswordDto) {
