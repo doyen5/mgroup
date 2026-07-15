@@ -200,4 +200,53 @@ export const api = {
       method: 'POST',
       body: payload,
     }),
+  getEvents: () => request('/events'),
+  createEvent: (payload) =>
+    request('/events', {
+      method: 'POST',
+      body: payload,
+    }),
+  updateEvent: (eventId, payload) =>
+    request(`/events/${eventId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  addEventAssignment: (eventId, payload) =>
+    request(`/events/${eventId}/assignments`, {
+      method: 'POST',
+      body: payload,
+    }),
+  removeEventAssignment: (eventId, assignmentId) =>
+    request(`/events/${eventId}/assignments/${assignmentId}`, {
+      method: 'DELETE',
+    }),
+  addEventChecklistItem: (eventId, payload) =>
+    request(`/events/${eventId}/checklist`, {
+      method: 'POST',
+      body: payload,
+    }),
+  updateEventChecklistItem: (eventId, itemId, payload) =>
+    request(`/events/${eventId}/checklist/${itemId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  addEventProductionStep: (eventId, payload) =>
+    request(`/events/${eventId}/production-steps`, {
+      method: 'POST',
+      body: payload,
+    }),
+  updateEventProductionStep: (eventId, stepId, payload) =>
+    request(`/events/${eventId}/production-steps/${stepId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  addEventAttachment: (eventId, payload) =>
+    request(`/events/${eventId}/attachments`, {
+      method: 'POST',
+      body: payload,
+    }),
+  removeEventAttachment: (eventId, attachmentId) =>
+    request(`/events/${eventId}/attachments/${attachmentId}`, {
+      method: 'DELETE',
+    }),
 }

@@ -55,6 +55,22 @@ enum AuthChallengeType {
   PHONE_LOGIN
 }
 
+enum EventStatus {
+  DRAFT
+  IN_PREPARATION
+  VALIDATED
+  COMPLETED
+  CANCELLED
+}
+
+enum EventAttachmentType {
+  CONTRACT
+  TECHNICAL_SHEET
+  QUOTE
+  PHOTO
+  OTHER
+}
+
 model Company {
   id             String   @id @default(cuid())
   name           String
@@ -68,7 +84,8 @@ model Company {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  users User[]
+  users  User[]
+  events Event[]
 }
 
 model User {
@@ -101,6 +118,10 @@ model User {
   authChallenges          AuthChallenge[]
   oauthAccounts           OAuthAccount[]
   auditLogs               LoginAuditLog[]
+  createdEvents           Event[]                  @relation("EventCreatedBy")
+  responsibleEvents       Event[]                  @relation("EventResponsible")
+  eventAssignments        EventAssignment[]
+  productionSteps         EventProductionStep[]    @relation("EventProductionOwner")
 }
 
 model Role {
@@ -198,4 +219,83 @@ model LoginAuditLog {
   createdAt DateTime    @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model Event {
+  id            String      @id @default(cuid())
+  companyId     String?
+  title         String
+  description   String?
+  location      String?
+  startsAt      DateTime
+  endsAt        DateTime?
+  budgetFcfa    Int?
+  status        EventStatus @default(DRAFT)
+  createdById   String?
+  responsibleId String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  company     Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy   User?                 @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  responsible User?                 @relation("EventResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  assignments EventAssignment[]
+  checklist   EventChecklistItem[]
+  steps       EventProductionStep[]
+  attachments EventAttachment[]
+}
+
+model EventAssignment {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  roleNote  String?
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+}
+
+model EventChecklistItem {
+  id        String    @id @default(cuid())
+  eventId   String
+  title     String
+  isDone    Boolean   @default(false)
+  dueAt     DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model EventProductionStep {
+  id        String      @id @default(cuid())
+  eventId   String
+  title     String
+  notes     String?
+  startsAt  DateTime?
+  endsAt    DateTime?
+  status    EventStatus @default(IN_PREPARATION)
+  ownerId   String?
+  order     Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  owner User? @relation("EventProductionOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+}
+
+model EventAttachment {
+  id        String              @id @default(cuid())
+  eventId   String
+  type      EventAttachmentType @default(OTHER)
+  label     String
+  url       String
+  fileName  String?
+  mimeType  String?
+  createdAt DateTime            @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }

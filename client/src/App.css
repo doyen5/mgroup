@@ -1968,6 +1968,144 @@ button:disabled,
   background: #f7fbff;
 }
 
+.event-workspace,
+.event-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 18px;
+}
+
+.event-form h2,
+.event-list-panel h2 {
+  margin: 0;
+  color: #10233f;
+}
+
+.event-form textarea {
+  min-height: 94px;
+  resize: vertical;
+}
+
+.event-card-list {
+  display: grid;
+  gap: 10px;
+}
+
+.event-row-card {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+  color: #10233f;
+  background: #f7fbff;
+  text-align: left;
+}
+
+.event-row-card.active,
+.event-row-card:hover {
+  border-color: #9fd8f5;
+  background: #eaf7ff;
+}
+
+.event-row-card span,
+.event-row-card small {
+  color: #58708f;
+}
+
+.event-summary-card {
+  grid-column: 1 / -1;
+}
+
+.compact-event-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.compact-event-form.two {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.compact-event-form button {
+  min-height: 42px;
+}
+
+.event-timeline,
+.event-checklist {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-timeline li,
+.event-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.event-timeline svg {
+  color: #159bd3;
+  flex: 0 0 auto;
+}
+
+.event-timeline strong,
+.event-checklist span {
+  color: #10233f;
+  font-weight: 850;
+}
+
+.event-timeline span,
+.event-checklist small {
+  color: #58708f;
+}
+
+.event-checklist li {
+  justify-content: space-between;
+}
+
+.event-checklist label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.document-grid a,
+.document-grid p {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+  color: #10233f;
+  background: #f7fbff;
+  text-decoration: none;
+}
+
+.document-grid svg {
+  color: #159bd3;
+}
+
+.document-grid small {
+  color: #58708f;
+}
+
 .horizontal-bars {
   display: grid;
   gap: 16px;
@@ -2294,6 +2432,7 @@ button:disabled,
 .setup-form select,
 .settings-card input,
 .settings-card select,
+.settings-card textarea,
 .approval-row select {
   width: 100%;
   min-height: 44px;
@@ -2340,6 +2479,7 @@ button:disabled,
 .setup-form select:focus,
 .settings-card input:focus,
 .settings-card select:focus,
+.settings-card textarea:focus,
 .approval-row select:focus,
 .auth-switch button:focus-visible,
 .social-row button:focus-visible,
@@ -2422,6 +2562,10 @@ button:disabled,
   .dashboard-insights,
   .budget-grid,
   .module-grid,
+  .event-workspace,
+  .event-detail-grid,
+  .compact-event-form,
+  .compact-event-form.two,
   .settings-meta-grid,
   .settings-section-grid,
   .settings-profile-row,

@@ -64,6 +64,22 @@ const eventRows = [
   { title: 'Activation marque', date: '04 aout 2026', budget: 6200000, status: 'Brief client' },
 ]
 
+const eventStatusOptions = [
+  { value: 'DRAFT', label: 'Brouillon' },
+  { value: 'IN_PREPARATION', label: 'En preparation' },
+  { value: 'VALIDATED', label: 'Valide' },
+  { value: 'COMPLETED', label: 'Termine' },
+  { value: 'CANCELLED', label: 'Annule' },
+]
+
+const eventAttachmentTypes = [
+  { value: 'CONTRACT', label: 'Contrat' },
+  { value: 'TECHNICAL_SHEET', label: 'Fiche technique' },
+  { value: 'QUOTE', label: 'Devis' },
+  { value: 'PHOTO', label: 'Photo' },
+  { value: 'OTHER', label: 'Autre' },
+]
+
 const financeRows = [
   { label: 'Cachets artistes', value: 9200000, percent: 58 },
   { label: 'Technique et scene', value: 5400000, percent: 34 },
@@ -92,6 +108,22 @@ const formatDateTime = (date) =>
   }).format(date)
 
 const formatFcfa = (value) => `${new Intl.NumberFormat('fr-FR').format(value)} FCFA`
+
+const formatDateInput = (value) => {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return offsetDate.toISOString().slice(0, 16)
+}
+
+const eventStatusLabel = (status) =>
+  eventStatusOptions.find((option) => option.value === status)?.label ?? status
+
+const eventAttachmentLabel = (type) =>
+  eventAttachmentTypes.find((option) => option.value === type)?.label ?? type
 
 // Lecture securisee d'un champ de formulaire HTML.
 const getFormValue = (formData, name) => String(formData.get(name) ?? '').trim()
@@ -2332,25 +2364,526 @@ function ModuleHeader({ description, icon: Icon, label, title }) {
 }
 
 function EventsPage() {
+  const [events, setEvents] = useState([])
+  const [users, setUsers] = useState([])
+  const [selectedEventId, setSelectedEventId] = useState('')
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const selectedEvent = events.find((event) => event.id === selectedEventId) ?? events[0]
+
+  const refreshEvents = useCallback(async () => {
+    setIsLoading(true)
+    setNotice('')
+
+    try {
+      const nextEvents = await api.getEvents()
+      setEvents(nextEvents)
+      setSelectedEventId((current) => current || nextEvents[0]?.id || '')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    Promise.all([api.getEvents(), api.getUsers().catch(() => [])])
+      .then(([nextEvents, nextUsers]) => {
+        if (!isMounted) {
+          return
+        }
+
+        setEvents(nextEvents)
+        setSelectedEventId(nextEvents[0]?.id || '')
+        setUsers(nextUsers)
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const syncSelectedEvent = (updatedEvent) => {
+    setEvents((current) => {
+      const exists = current.some((event) => event.id === updatedEvent.id)
+      return exists
+        ? current.map((event) => (event.id === updatedEvent.id ? updatedEvent : event))
+        : [updatedEvent, ...current]
+    })
+    setSelectedEventId(updatedEvent.id)
+  }
+
+  const createEvent = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const created = await api.createEvent({
+        title: getFormValue(formData, 'title'),
+        description: getFormValue(formData, 'description'),
+        location: getFormValue(formData, 'location'),
+        startsAt: getFormValue(formData, 'startsAt'),
+        endsAt: getFormValue(formData, 'endsAt'),
+        budgetFcfa: Number(getFormValue(formData, 'budgetFcfa') || 0),
+        status: getFormValue(formData, 'status') || 'DRAFT',
+        responsibleId: getFormValue(formData, 'responsibleId'),
+      })
+      event.currentTarget.reset()
+      syncSelectedEvent(created)
+      setNotice('Evenement cree avec succes.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const updateEventStatus = async (nextStatus) => {
+    if (!selectedEvent) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      syncSelectedEvent(await api.updateEvent(selectedEvent.id, { status: nextStatus }))
+      setNotice('Statut evenement mis a jour.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const addAssignment = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedEvent) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      syncSelectedEvent(
+        await api.addEventAssignment(selectedEvent.id, {
+          userId: getFormValue(formData, 'userId'),
+          roleNote: getFormValue(formData, 'roleNote'),
+        }),
+      )
+      event.currentTarget.reset()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const addChecklistItem = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedEvent) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      syncSelectedEvent(
+        await api.addEventChecklistItem(selectedEvent.id, {
+          title: getFormValue(formData, 'title'),
+          dueAt: getFormValue(formData, 'dueAt'),
+        }),
+      )
+      event.currentTarget.reset()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const toggleChecklistItem = async (item) => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      syncSelectedEvent(
+        await api.updateEventChecklistItem(selectedEvent.id, item.id, {
+          isDone: !item.isDone,
+        }),
+      )
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const addProductionStep = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedEvent) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      syncSelectedEvent(
+        await api.addEventProductionStep(selectedEvent.id, {
+          title: getFormValue(formData, 'title'),
+          notes: getFormValue(formData, 'notes'),
+          startsAt: getFormValue(formData, 'startsAt'),
+          endsAt: getFormValue(formData, 'endsAt'),
+          status: getFormValue(formData, 'status') || 'IN_PREPARATION',
+          ownerId: getFormValue(formData, 'ownerId'),
+        }),
+      )
+      event.currentTarget.reset()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const addAttachment = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedEvent) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const file = formData.get('file')
+      const fileUrl = await fileToDataUrl(file)
+      syncSelectedEvent(
+        await api.addEventAttachment(selectedEvent.id, {
+          label: getFormValue(formData, 'label'),
+          type: getFormValue(formData, 'type') || 'OTHER',
+          url: fileUrl || getFormValue(formData, 'url'),
+          fileName: file instanceof File ? file.name : undefined,
+          mimeType: file instanceof File ? file.type : undefined,
+        }),
+      )
+      event.currentTarget.reset()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const completionRate = selectedEvent?.checklist?.length
+    ? Math.round(
+        (selectedEvent.checklist.filter((item) => item.isDone).length /
+          selectedEvent.checklist.length) *
+          100,
+      )
+    : 0
+
   return (
     <section className="module-page">
       <ModuleHeader
-        description="Planifiez les prestations, suivez les statuts et gardez une lecture rapide des budgets par evenement."
+        description="Creez les evenements, organisez le planning de production, affectez les responsables et centralisez les documents."
         icon={CalendarDays}
         label="Evenementiel"
         title="Evenements."
       />
-      <div className="module-grid">
-        {eventRows.map((event) => (
-          <article className="module-card" key={event.title}>
-            <span className="card-icon"><CalendarDays size={20} /></span>
-            <h3>{event.title}</h3>
-            <p>{event.date}</p>
-            <strong>{formatFcfa(event.budget)}</strong>
-            <small>{event.status}</small>
-          </article>
-        ))}
+
+      {notice && <p className="auth-notice">{notice}</p>}
+
+      <div className="event-workspace">
+        <form className="event-form settings-card" onSubmit={createEvent}>
+          {/* Creation rapide : chaque evenement commence par les informations de pilotage. */}
+          <p className="eyebrow">Creation</p>
+          <h2>Nouvel evenement.</h2>
+          <div className="form-grid">
+            <label>
+              Nom de l'evenement
+              <input name="title" type="text" placeholder="Concert prive - Plateau" required />
+            </label>
+            <label>
+              Lieu
+              <input name="location" type="text" placeholder="Abidjan" />
+            </label>
+            <label>
+              Debut
+              <input name="startsAt" type="datetime-local" required />
+            </label>
+            <label>
+              Fin
+              <input name="endsAt" type="datetime-local" />
+            </label>
+            <label>
+              Budget FCFA
+              <input name="budgetFcfa" type="number" min="0" placeholder="4500000" />
+            </label>
+            <label>
+              Statut
+              <select name="status" defaultValue="DRAFT">
+                {eventStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Responsable
+              <select name="responsibleId" defaultValue="">
+                <option value="">Non defini</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {`${user.lastName} ${user.firstName}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Description
+              <textarea name="description" placeholder="Brief, objectifs, contraintes..." />
+            </label>
+          </div>
+          <button type="submit" className="primary-button" disabled={isSaving}>
+            {isSaving ? 'Enregistrement...' : 'Creer l evenement'}
+          </button>
+        </form>
+
+        <section className="event-list-panel settings-card">
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Calendrier</p>
+              <h2>{events.length} evenement(s).</h2>
+            </div>
+            <button type="button" className="secondary-button bordered" onClick={refreshEvents}>
+              Actualiser
+            </button>
+          </div>
+          {isLoading ? (
+            <p className="approval-empty">Chargement des evenements...</p>
+          ) : events.length === 0 ? (
+            <p className="approval-empty">Aucun evenement cree pour le moment.</p>
+          ) : (
+            <div className="event-card-list">
+              {events.map((event) => (
+                <button
+                  type="button"
+                  className={`event-row-card ${selectedEvent?.id === event.id ? 'active' : ''}`}
+                  key={event.id}
+                  onClick={() => setSelectedEventId(event.id)}
+                >
+                  <span>{formatDateTime(new Date(event.startsAt))}</span>
+                  <strong>{event.title}</strong>
+                  <small>{eventStatusLabel(event.status)}</small>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
+
+      {selectedEvent && (
+        <section className="event-detail-grid">
+          <article className="settings-card event-summary-card">
+            <div className="settings-panel-heading">
+              <div>
+                <p className="eyebrow">Fiche evenement</p>
+                <h2>{selectedEvent.title}</h2>
+                <p>{selectedEvent.description || 'Aucune description renseignee.'}</p>
+              </div>
+              <select
+                value={selectedEvent.status}
+                onChange={(event) => updateEventStatus(event.target.value)}
+              >
+                {eventStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="settings-meta-grid">
+              <article>
+                <span>Debut</span>
+                <strong>{formatDateTime(new Date(selectedEvent.startsAt))}</strong>
+              </article>
+              <article>
+                <span>Budget</span>
+                <strong>
+                  {selectedEvent.budgetFcfa ? formatFcfa(selectedEvent.budgetFcfa) : 'Non defini'}
+                </strong>
+              </article>
+              <article>
+                <span>Responsable</span>
+                <strong>
+                  {selectedEvent.responsible
+                    ? `${selectedEvent.responsible.lastName} ${selectedEvent.responsible.firstName}`
+                    : 'Non defini'}
+                </strong>
+              </article>
+              <article>
+                <span>Checklist</span>
+                <strong>{completionRate}% pret</strong>
+              </article>
+            </div>
+          </article>
+
+          <article className="settings-card">
+            <p className="eyebrow">Planning de production</p>
+            <form className="compact-event-form" onSubmit={addProductionStep}>
+              <input name="title" type="text" placeholder="Etape de production" required />
+              <input name="startsAt" type="datetime-local" />
+              <input name="endsAt" type="datetime-local" />
+              <select name="ownerId" defaultValue="">
+                <option value="">Responsable</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {`${user.lastName} ${user.firstName}`}
+                  </option>
+                ))}
+              </select>
+              <select name="status" defaultValue="IN_PREPARATION">
+                {eventStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+              <input name="notes" type="text" placeholder="Notes" />
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Ajouter
+              </button>
+            </form>
+            <ul className="event-timeline">
+              {selectedEvent.steps.map((step) => (
+                <li key={step.id}>
+                  <CalendarDays size={18} aria-hidden="true" />
+                  <div>
+                    <strong>{step.title}</strong>
+                    <span>
+                      {step.startsAt ? formatDateInput(step.startsAt).replace('T', ' ') : 'Date a definir'} -{' '}
+                      {eventStatusLabel(step.status)}
+                    </span>
+                  </div>
+                </li>
+              ))}
+              {selectedEvent.steps.length === 0 && <li>Aucune etape de production.</li>}
+            </ul>
+          </article>
+
+          <article className="settings-card">
+            <p className="eyebrow">Checklist avant evenement</p>
+            <form className="compact-event-form two" onSubmit={addChecklistItem}>
+              <input name="title" type="text" placeholder="Element a verifier" required />
+              <input name="dueAt" type="datetime-local" />
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Ajouter
+              </button>
+            </form>
+            <ul className="event-checklist">
+              {selectedEvent.checklist.map((item) => (
+                <li key={item.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={item.isDone}
+                      onChange={() => toggleChecklistItem(item)}
+                    />
+                    <span>{item.title}</span>
+                  </label>
+                  {item.dueAt && <small>{formatDateTime(new Date(item.dueAt))}</small>}
+                </li>
+              ))}
+              {selectedEvent.checklist.length === 0 && <li>Aucun element de checklist.</li>}
+            </ul>
+          </article>
+
+          <article className="settings-card">
+            <p className="eyebrow">Responsables affectes</p>
+            <form className="compact-event-form two" onSubmit={addAssignment}>
+              <select name="userId" required defaultValue="">
+                <option value="">Choisir un utilisateur</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {`${user.lastName} ${user.firstName}`}
+                  </option>
+                ))}
+              </select>
+              <input name="roleNote" type="text" placeholder="Mission sur l'evenement" />
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Affecter
+              </button>
+            </form>
+            <ul className="compact-list">
+              {selectedEvent.assignments.map((assignment) => (
+                <li key={assignment.id}>
+                  <span>{`${assignment.user.lastName} ${assignment.user.firstName}`}</span>
+                  <strong>{assignment.roleNote || 'Responsable'}</strong>
+                </li>
+              ))}
+              {selectedEvent.assignments.length === 0 && <li>Aucune affectation.</li>}
+            </ul>
+          </article>
+
+          <article className="settings-card event-documents">
+            <p className="eyebrow">Pieces jointes</p>
+            <form className="compact-event-form" onSubmit={addAttachment}>
+              <input name="label" type="text" placeholder="Contrat, devis, fiche..." required />
+              <select name="type" defaultValue="CONTRACT">
+                {eventAttachmentTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+              <input name="url" type="url" placeholder="Lien document" />
+              <input name="file" type="file" />
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Ajouter
+              </button>
+            </form>
+            <div className="document-grid">
+              {selectedEvent.attachments.map((attachment) => (
+                <a href={attachment.url} target="_blank" rel="noreferrer" key={attachment.id}>
+                  <ClipboardCheck size={18} aria-hidden="true" />
+                  <span>{attachment.label}</span>
+                  <small>{eventAttachmentLabel(attachment.type)}</small>
+                </a>
+              ))}
+              {selectedEvent.attachments.length === 0 && <p>Aucune piece jointe.</p>}
+            </div>
+          </article>
+        </section>
+      )}
     </section>
   )
 }

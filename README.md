@@ -437,6 +437,30 @@ Dans `Parametres > Journal`, l'Admin voit les actions sensibles :
 
 Les preferences, notifications et modules sont stockes en `localStorage` pour le prototype. En production, il faudra ajouter des tables Prisma dediees.
 
+## Gestion evenementielle
+
+La priorite evenementielle ajoute un vrai module `Evenements` connecte au backend.
+
+Fonctionnalites disponibles :
+
+- creation d'un evenement avec titre, description, lieu, dates, budget FCFA, statut et responsable ;
+- planning de production par evenement ;
+- affectation de responsables ou collaborateurs ;
+- checklist avant evenement avec cases a cocher ;
+- statuts : `DRAFT`, `IN_PREPARATION`, `VALIDATED`, `COMPLETED`, `CANCELLED` ;
+- calendrier/liste des evenements dans le dashboard ;
+- pieces jointes : contrats, fiches techniques, devis, photos ou autre document.
+
+Le frontend utilise maintenant la page `Evenements` du dashboard au lieu des donnees statiques. Les pieces jointes peuvent etre ajoutees par lien ou fichier local converti en Data URL pour le prototype. En production, il faudra remplacer les Data URLs par un stockage fichier reel.
+
+Tables ajoutees :
+
+- `Event`
+- `EventAssignment`
+- `EventChecklistItem`
+- `EventProductionStep`
+- `EventAttachment`
+
 ## Remember me et mot de passe oublie
 
 `Remember me` fonctionne ainsi :
@@ -511,6 +535,23 @@ GET  /api/auth/login-history
 GET  /api/auth/me
 ```
 
+Evenements :
+
+```txt
+GET    /api/events
+POST   /api/events
+GET    /api/events/:id
+PATCH  /api/events/:id
+POST   /api/events/:id/assignments
+DELETE /api/events/:id/assignments/:assignmentId
+POST   /api/events/:id/checklist
+PATCH  /api/events/:id/checklist/:itemId
+POST   /api/events/:id/production-steps
+PATCH  /api/events/:id/production-steps/:stepId
+POST   /api/events/:id/attachments
+DELETE /api/events/:id/attachments/:attachmentId
+```
+
 Users :
 
 ```txt
@@ -540,6 +581,11 @@ Tables principales :
 - `EmailVerificationToken`
 - `AuthChallenge`
 - `OAuthAccount`
+- `Event`
+- `EventAssignment`
+- `EventChecklistItem`
+- `EventProductionStep`
+- `EventAttachment`
 - `LoginAuditLog`
 
 Actions d'audit principales :
@@ -649,6 +695,15 @@ npm run build
 npm run start:dev
 ```
 
+Note : la migration `20260715063000_add_event_management` a ete creee manuellement parce que
+Docker/PostgreSQL n'etait pas joignable pendant cette etape. Des que Docker Desktop est ouvert et
+que PostgreSQL repond sur `localhost:5432`, lancer :
+
+```powershell
+cd D:\PROJETS\Dev\mgroup-app\server
+npm run prisma:migrate
+```
+
 Frontend :
 
 ```powershell
@@ -698,6 +753,8 @@ GET http://127.0.0.1:4000/api/users/activity
 GET http://127.0.0.1:4000/api/users/:id/history
 GET http://127.0.0.1:4000/api/auth/sessions
 GET http://127.0.0.1:4000/api/auth/login-history
+GET http://127.0.0.1:4000/api/events
+POST http://127.0.0.1:4000/api/events
 GET http://127.0.0.1:4000/api/setup/company
 PATCH http://127.0.0.1:4000/api/setup/company
 GET http://127.0.0.1:5173/
