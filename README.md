@@ -461,6 +461,33 @@ Tables ajoutees :
 - `EventProductionStep`
 - `EventAttachment`
 
+## Finances et budget
+
+La priorite finance ajoute un module connecte aux evenements.
+
+Fonctionnalites disponibles :
+
+- budget previsionnel par evenement ;
+- validation ou rejet des budgets par l'Admin ;
+- depenses reelles par categorie, prestataire et date ;
+- suivi des paiements avec statuts `PENDING`, `PARTIAL`, `PAID`, `OVERDUE`, `CANCELLED` ;
+- documents financiers : devis, factures, recus et autres documents ;
+- totaux globaux en FCFA ;
+- alertes quand les depenses reelles depassent la limite prevue ou validee.
+
+La limite budgetaire utilisee par l'alerte est calculee dans cet ordre :
+
+1. budget valide par l'Admin ;
+2. budget previsionnel ;
+3. budget simple renseigne dans la fiche evenement.
+
+Tables ajoutees :
+
+- `EventBudget`
+- `EventExpense`
+- `EventPayment`
+- `EventFinanceDocument`
+
 ## Remember me et mot de passe oublie
 
 `Remember me` fonctionne ainsi :
@@ -552,6 +579,22 @@ POST   /api/events/:id/attachments
 DELETE /api/events/:id/attachments/:attachmentId
 ```
 
+Finances :
+
+```txt
+GET    /api/finance/summary
+GET    /api/finance/events/:eventId
+POST   /api/finance/events/:eventId/budgets
+PATCH  /api/finance/budgets/:budgetId
+PATCH  /api/finance/budgets/:budgetId/approve
+PATCH  /api/finance/budgets/:budgetId/reject
+POST   /api/finance/events/:eventId/expenses
+POST   /api/finance/events/:eventId/payments
+PATCH  /api/finance/payments/:paymentId
+POST   /api/finance/events/:eventId/documents
+DELETE /api/finance/documents/:documentId
+```
+
 Users :
 
 ```txt
@@ -586,6 +629,10 @@ Tables principales :
 - `EventChecklistItem`
 - `EventProductionStep`
 - `EventAttachment`
+- `EventBudget`
+- `EventExpense`
+- `EventPayment`
+- `EventFinanceDocument`
 - `LoginAuditLog`
 
 Actions d'audit principales :
@@ -755,15 +802,18 @@ GET http://127.0.0.1:4000/api/auth/sessions
 GET http://127.0.0.1:4000/api/auth/login-history
 GET http://127.0.0.1:4000/api/events
 POST http://127.0.0.1:4000/api/events
+GET http://127.0.0.1:4000/api/finance/summary
+GET http://127.0.0.1:4000/api/finance/events/:eventId
 GET http://127.0.0.1:4000/api/setup/company
 PATCH http://127.0.0.1:4000/api/setup/company
 GET http://127.0.0.1:5173/
 ```
 
 Les routes `/api/auth/sessions`, `/api/auth/login-history`, `/api/auth/2fa/setup`,
-`/api/auth/2fa/enable`, `/api/auth/2fa/disable`, `/api/setup/company` et
-`PATCH /api/setup/company` demandent une session connectee valide. Les routes entreprise et la
-configuration 2FA sont reservees au role `ADMIN`.
+`/api/auth/2fa/enable`, `/api/auth/2fa/disable`, `/api/events`, `/api/finance/*`,
+`/api/setup/company` et `PATCH /api/setup/company` demandent une session connectee valide.
+Les routes entreprise, la configuration 2FA et la validation/rejet de budgets sont reservees au
+role `ADMIN`.
 
 Etat actuel de la base de test au moment de la derniere verification :
 

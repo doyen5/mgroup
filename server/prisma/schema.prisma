@@ -71,6 +71,28 @@ enum EventAttachmentType {
   OTHER
 }
 
+enum BudgetStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum FinanceDocumentType {
+  QUOTE
+  INVOICE
+  RECEIPT
+  OTHER
+}
+
 model Company {
   id             String   @id @default(cuid())
   name           String
@@ -122,6 +144,7 @@ model User {
   responsibleEvents       Event[]                  @relation("EventResponsible")
   eventAssignments        EventAssignment[]
   productionSteps         EventProductionStep[]    @relation("EventProductionOwner")
+  validatedBudgets        EventBudget[]            @relation("EventBudgetValidator")
 }
 
 model Role {
@@ -236,13 +259,17 @@ model Event {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  company     Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  createdBy   User?                 @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  responsible User?                 @relation("EventResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  company     Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdBy   User?                  @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  responsible User?                  @relation("EventResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
   assignments EventAssignment[]
   checklist   EventChecklistItem[]
   steps       EventProductionStep[]
   attachments EventAttachment[]
+  budgets     EventBudget[]
+  expenses    EventExpense[]
+  payments    EventPayment[]
+  documents   EventFinanceDocument[]
 }
 
 model EventAssignment {
@@ -296,6 +323,69 @@ model EventAttachment {
   fileName  String?
   mimeType  String?
   createdAt DateTime            @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model EventBudget {
+  id                 String       @id @default(cuid())
+  eventId            String
+  label              String
+  plannedAmountFcfa  Int
+  approvedAmountFcfa Int?
+  status             BudgetStatus @default(DRAFT)
+  notes              String?
+  validatedById      String?
+  validatedAt        DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  validatedBy User? @relation("EventBudgetValidator", fields: [validatedById], references: [id], onDelete: SetNull)
+}
+
+model EventExpense {
+  id         String   @id @default(cuid())
+  eventId    String
+  label      String
+  category   String?
+  vendor     String?
+  amountFcfa Int
+  spentAt    DateTime @default(now())
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model EventPayment {
+  id         String        @id @default(cuid())
+  eventId    String
+  label      String
+  amountFcfa Int
+  status     PaymentStatus @default(PENDING)
+  dueAt      DateTime?
+  paidAt     DateTime?
+  method     String?
+  reference  String?
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model EventFinanceDocument {
+  id         String              @id @default(cuid())
+  eventId    String
+  type       FinanceDocumentType @default(OTHER)
+  label      String
+  amountFcfa Int?
+  url        String
+  fileName   String?
+  mimeType   String?
+  createdAt  DateTime            @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }

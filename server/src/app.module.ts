@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './common/guards/roles.guard';
 import { SecurityModule } from './common/security/security.module';
 import { EventsModule } from './events/events.module';
+import { FinanceModule } from './finance/finance.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SetupModule } from './setup/setup.module';
 import { UsersModule } from './users/users.module';
@@ -18,6 +19,7 @@ import { UsersModule } from './users/users.module';
     SetupModule,
     UsersModule,
     EventsModule,
+    FinanceModule,
   ],
   providers: [
     {

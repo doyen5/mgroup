@@ -249,4 +249,50 @@ export const api = {
     request(`/events/${eventId}/attachments/${attachmentId}`, {
       method: 'DELETE',
     }),
+  getFinanceSummary: () => request('/finance/summary'),
+  getEventFinance: (eventId) => request(`/finance/events/${eventId}`),
+  createEventBudget: (eventId, payload) =>
+    request(`/finance/events/${eventId}/budgets`, {
+      method: 'POST',
+      body: payload,
+    }),
+  updateEventBudget: (budgetId, payload) =>
+    request(`/finance/budgets/${budgetId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  approveEventBudget: (budgetId, payload = {}) =>
+    request(`/finance/budgets/${budgetId}/approve`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  rejectEventBudget: (budgetId, payload = {}) =>
+    request(`/finance/budgets/${budgetId}/reject`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  createEventExpense: (eventId, payload) =>
+    request(`/finance/events/${eventId}/expenses`, {
+      method: 'POST',
+      body: payload,
+    }),
+  createEventPayment: (eventId, payload) =>
+    request(`/finance/events/${eventId}/payments`, {
+      method: 'POST',
+      body: payload,
+    }),
+  updateEventPayment: (paymentId, payload) =>
+    request(`/finance/payments/${paymentId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  createFinanceDocument: (eventId, payload) =>
+    request(`/finance/events/${eventId}/documents`, {
+      method: 'POST',
+      body: payload,
+    }),
+  removeFinanceDocument: (documentId) =>
+    request(`/finance/documents/${documentId}`, {
+      method: 'DELETE',
+    }),
 }

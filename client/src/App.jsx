@@ -80,6 +80,28 @@ const eventAttachmentTypes = [
   { value: 'OTHER', label: 'Autre' },
 ]
 
+const budgetStatusOptions = [
+  { value: 'DRAFT', label: 'Brouillon' },
+  { value: 'PENDING_APPROVAL', label: 'En attente' },
+  { value: 'APPROVED', label: 'Valide' },
+  { value: 'REJECTED', label: 'Rejete' },
+]
+
+const paymentStatusOptions = [
+  { value: 'PENDING', label: 'En attente' },
+  { value: 'PARTIAL', label: 'Partiel' },
+  { value: 'PAID', label: 'Paye' },
+  { value: 'OVERDUE', label: 'En retard' },
+  { value: 'CANCELLED', label: 'Annule' },
+]
+
+const financeDocumentTypes = [
+  { value: 'QUOTE', label: 'Devis' },
+  { value: 'INVOICE', label: 'Facture' },
+  { value: 'RECEIPT', label: 'Recu' },
+  { value: 'OTHER', label: 'Autre' },
+]
+
 const financeRows = [
   { label: 'Cachets artistes', value: 9200000, percent: 58 },
   { label: 'Technique et scene', value: 5400000, percent: 34 },
@@ -124,6 +146,15 @@ const eventStatusLabel = (status) =>
 
 const eventAttachmentLabel = (type) =>
   eventAttachmentTypes.find((option) => option.value === type)?.label ?? type
+
+const budgetStatusLabel = (status) =>
+  budgetStatusOptions.find((option) => option.value === status)?.label ?? status
+
+const paymentStatusLabel = (status) =>
+  paymentStatusOptions.find((option) => option.value === status)?.label ?? status
+
+const financeDocumentLabel = (type) =>
+  financeDocumentTypes.find((option) => option.value === type)?.label ?? type
 
 // Lecture securisee d'un champ de formulaire HTML.
 const getFormValue = (formData, name) => String(formData.get(name) ?? '').trim()
@@ -2363,6 +2394,477 @@ function ModuleHeader({ description, icon: Icon, label, title }) {
   )
 }
 
+function FinanceWorkspacePage() {
+  const [summary, setSummary] = useState(null)
+  const [eventFinance, setEventFinance] = useState(null)
+  const [selectedEventId, setSelectedEventId] = useState('')
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    api
+      .getFinanceSummary()
+      .then((result) => {
+        if (!isMounted) {
+          return
+        }
+
+        setSummary(result)
+        setSelectedEventId(result.events[0]?.eventId ?? '')
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedEventId) {
+      return undefined
+    }
+
+    let isMounted = true
+
+    api
+      .getEventFinance(selectedEventId)
+      .then((result) => {
+        if (isMounted) {
+          setEventFinance(result)
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedEventId])
+
+  const refreshFinance = async () => {
+    setIsLoading(true)
+    setNotice('')
+
+    try {
+      const result = await api.getFinanceSummary()
+      setSummary(result)
+      if (selectedEventId) {
+        setEventFinance(await api.getEventFinance(selectedEventId))
+      } else {
+        setSelectedEventId(result.events[0]?.eventId ?? '')
+      }
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const syncFinance = async (updatedEventFinance) => {
+    setEventFinance(updatedEventFinance)
+    setSummary(await api.getFinanceSummary())
+  }
+
+  const submitBudget = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedEventId) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await syncFinance(
+        await api.createEventBudget(selectedEventId, {
+          label: getFormValue(formData, 'label'),
+          plannedAmountFcfa: Number(getFormValue(formData, 'plannedAmountFcfa') || 0),
+          status: getFormValue(formData, 'status') || 'PENDING_APPROVAL',
+          notes: getFormValue(formData, 'notes'),
+        }),
+      )
+      event.currentTarget.reset()
+      setNotice('Budget previsionnel ajoute.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const validateBudget = async (budget, action) => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const updated =
+        action === 'approve'
+          ? await api.approveEventBudget(budget.id, {
+              approvedAmountFcfa: budget.plannedAmountFcfa,
+            })
+          : await api.rejectEventBudget(budget.id, { notes: 'Budget rejete par Admin' })
+      await syncFinance(updated)
+      setNotice(action === 'approve' ? 'Budget valide.' : 'Budget rejete.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitExpense = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedEventId) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await syncFinance(
+        await api.createEventExpense(selectedEventId, {
+          label: getFormValue(formData, 'label'),
+          amountFcfa: Number(getFormValue(formData, 'amountFcfa') || 0),
+          category: getFormValue(formData, 'category'),
+          vendor: getFormValue(formData, 'vendor'),
+          spentAt: getFormValue(formData, 'spentAt'),
+          notes: getFormValue(formData, 'notes'),
+        }),
+      )
+      event.currentTarget.reset()
+      setNotice('Depense reelle ajoutee.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitPayment = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedEventId) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await syncFinance(
+        await api.createEventPayment(selectedEventId, {
+          label: getFormValue(formData, 'label'),
+          amountFcfa: Number(getFormValue(formData, 'amountFcfa') || 0),
+          status: getFormValue(formData, 'status') || 'PENDING',
+          dueAt: getFormValue(formData, 'dueAt'),
+          paidAt: getFormValue(formData, 'paidAt'),
+          method: getFormValue(formData, 'method'),
+          reference: getFormValue(formData, 'reference'),
+        }),
+      )
+      event.currentTarget.reset()
+      setNotice('Paiement ajoute.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitDocument = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedEventId) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const file = formData.get('file')
+      const fileUrl = await fileToDataUrl(file)
+      await syncFinance(
+        await api.createFinanceDocument(selectedEventId, {
+          label: getFormValue(formData, 'label'),
+          type: getFormValue(formData, 'type') || 'QUOTE',
+          amountFcfa: Number(getFormValue(formData, 'amountFcfa') || 0),
+          url: fileUrl || getFormValue(formData, 'url'),
+          fileName: file instanceof File ? file.name : undefined,
+          mimeType: file instanceof File ? file.type : undefined,
+        }),
+      )
+      event.currentTarget.reset()
+      setNotice('Document financier ajoute.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const finance = eventFinance?.finance
+
+  return (
+    <>
+      {notice && <p className="auth-notice">{notice}</p>}
+
+      <section className="finance-kpi-grid">
+        <article className="visual-panel">
+          <span>Budget previsionnel</span>
+          <strong>{formatFcfa(summary?.totals.plannedBudgetFcfa ?? 0)}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Budget valide</span>
+          <strong>{formatFcfa(summary?.totals.approvedBudgetFcfa ?? 0)}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Depenses reelles</span>
+          <strong>{formatFcfa(summary?.totals.actualExpensesFcfa ?? 0)}</strong>
+        </article>
+        <article className="visual-panel warning">
+          <span>Depassement</span>
+          <strong>{formatFcfa(summary?.totals.overBudgetFcfa ?? 0)}</strong>
+        </article>
+      </section>
+
+      <section className="settings-card">
+        <div className="settings-panel-heading">
+          <div>
+            <p className="eyebrow">Evenement</p>
+            <h2>Suivi financier par evenement.</h2>
+          </div>
+          <button type="button" className="secondary-button bordered" onClick={refreshFinance}>
+            Actualiser
+          </button>
+        </div>
+        <select
+          value={selectedEventId}
+          onChange={(event) => {
+            setSelectedEventId(event.target.value)
+            if (!event.target.value) {
+              setEventFinance(null)
+            }
+          }}
+          disabled={isLoading || !summary?.events.length}
+        >
+          <option value="">Choisir un evenement</option>
+          {summary?.events.map((event) => (
+            <option key={event.eventId} value={event.eventId}>
+              {event.title}
+            </option>
+          ))}
+        </select>
+      </section>
+
+      {summary?.alerts.length > 0 && (
+        <section className="alert-list">
+          {summary.alerts.map((alert) => (
+            <article className="alert-card" key={alert.eventId}>
+              <AlertTriangle size={22} aria-hidden="true" />
+              <div>
+                <strong>{alert.title}</strong>
+                <span>
+                  Depenses {formatFcfa(alert.actualExpensesFcfa)} / Limite {formatFcfa(alert.limitFcfa)}
+                </span>
+              </div>
+              <em>Depassement</em>
+            </article>
+          ))}
+        </section>
+      )}
+
+      {selectedEventId && eventFinance ? (
+        <section className="finance-workspace">
+          <article className="settings-card event-summary-card">
+            <div className="settings-meta-grid">
+              <article>
+                <span>Previsionnel</span>
+                <strong>{formatFcfa(finance?.plannedBudgetFcfa ?? 0)}</strong>
+              </article>
+              <article>
+                <span>Valide</span>
+                <strong>{formatFcfa(finance?.approvedBudgetFcfa ?? 0)}</strong>
+              </article>
+              <article>
+                <span>Reel</span>
+                <strong>{formatFcfa(finance?.actualExpensesFcfa ?? 0)}</strong>
+              </article>
+              <article>
+                <span>Paiements en attente</span>
+                <strong>{formatFcfa(finance?.pendingPaymentsFcfa ?? 0)}</strong>
+              </article>
+            </div>
+          </article>
+
+          <article className="settings-card">
+            <p className="eyebrow">Budget previsionnel</p>
+            <form className="compact-event-form" onSubmit={submitBudget}>
+              <input name="label" type="text" placeholder="Technique, communication..." required />
+              <input name="plannedAmountFcfa" type="number" min="0" placeholder="3000000" required />
+              <select name="status" defaultValue="PENDING_APPROVAL">
+                {budgetStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+              <input name="notes" type="text" placeholder="Notes" />
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Ajouter
+              </button>
+            </form>
+            <div className="finance-table">
+              {eventFinance.budgets.map((budget) => (
+                <div key={budget.id}>
+                  <span>{budget.label}</span>
+                  <strong>{formatFcfa(budget.plannedAmountFcfa)}</strong>
+                  <em>{budgetStatusLabel(budget.status)}</em>
+                  <div className="table-actions">
+                    <button
+                      type="button"
+                      className="secondary-button bordered"
+                      disabled={isSaving}
+                      onClick={() => validateBudget(budget, 'approve')}
+                    >
+                      Valider
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      disabled={isSaving}
+                      onClick={() => validateBudget(budget, 'reject')}
+                    >
+                      Rejeter
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {eventFinance.budgets.length === 0 && <p>Aucun budget previsionnel.</p>}
+            </div>
+          </article>
+
+          <article className="settings-card">
+            <p className="eyebrow">Depenses reelles</p>
+            <form className="compact-event-form" onSubmit={submitExpense}>
+              <input name="label" type="text" placeholder="Depense" required />
+              <input name="amountFcfa" type="number" min="0" placeholder="850000" required />
+              <input name="category" type="text" placeholder="Categorie" />
+              <input name="vendor" type="text" placeholder="Prestataire" />
+              <input name="spentAt" type="datetime-local" />
+              <input name="notes" type="text" placeholder="Notes" />
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Ajouter
+              </button>
+            </form>
+            <ul className="compact-list">
+              {eventFinance.expenses.map((expense) => (
+                <li key={expense.id}>
+                  <span>{expense.label}</span>
+                  <strong>{formatFcfa(expense.amountFcfa)}</strong>
+                </li>
+              ))}
+              {eventFinance.expenses.length === 0 && <li>Aucune depense.</li>}
+            </ul>
+          </article>
+
+          <article className="settings-card">
+            <p className="eyebrow">Paiements</p>
+            <form className="compact-event-form" onSubmit={submitPayment}>
+              <input name="label" type="text" placeholder="Acompte, solde..." required />
+              <input name="amountFcfa" type="number" min="0" placeholder="1200000" required />
+              <select name="status" defaultValue="PENDING">
+                {paymentStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+              <input name="dueAt" type="datetime-local" />
+              <input name="paidAt" type="datetime-local" />
+              <input name="method" type="text" placeholder="Mobile money, virement..." />
+              <input name="reference" type="text" placeholder="Reference" />
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Ajouter
+              </button>
+            </form>
+            <ul className="compact-list">
+              {eventFinance.payments.map((payment) => (
+                <li key={payment.id}>
+                  <span>{payment.label}</span>
+                  <strong>
+                    {formatFcfa(payment.amountFcfa)} - {paymentStatusLabel(payment.status)}
+                  </strong>
+                </li>
+              ))}
+              {eventFinance.payments.length === 0 && <li>Aucun paiement.</li>}
+            </ul>
+          </article>
+
+          <article className="settings-card event-documents">
+            <p className="eyebrow">Devis, factures et recus</p>
+            <form className="compact-event-form" onSubmit={submitDocument}>
+              <input name="label" type="text" placeholder="Document" required />
+              <select name="type" defaultValue="QUOTE">
+                {financeDocumentTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+              <input name="amountFcfa" type="number" min="0" placeholder="Montant" />
+              <input name="url" type="url" placeholder="Lien" />
+              <input name="file" type="file" />
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Ajouter
+              </button>
+            </form>
+            <div className="document-grid">
+              {eventFinance.documents.map((document) => (
+                <a href={document.url} target="_blank" rel="noreferrer" key={document.id}>
+                  <ClipboardCheck size={18} aria-hidden="true" />
+                  <span>{document.label}</span>
+                  <small>
+                    {financeDocumentLabel(document.type)}
+                    {document.amountFcfa ? ` - ${formatFcfa(document.amountFcfa)}` : ''}
+                  </small>
+                </a>
+              ))}
+              {eventFinance.documents.length === 0 && <p>Aucun document financier.</p>}
+            </div>
+          </article>
+        </section>
+      ) : (
+        <p className="approval-empty">
+          {isLoading ? 'Chargement financier...' : 'Creez un evenement avant de saisir les finances.'}
+        </p>
+      )}
+    </>
+  )
+}
+
 function EventsPage() {
   const [events, setEvents] = useState([])
   const [users, setUsers] = useState([])
@@ -2897,35 +3399,7 @@ function FinancePage() {
         label="Controle financier"
         title="Finance."
       />
-      <section className="analytics-grid">
-        <article className="chart-panel wide">
-          <div className="panel-heading">
-            <strong>Depenses par poste</strong>
-            <span>Total {formatFcfa(21300000)}</span>
-          </div>
-          <div className="horizontal-bars">
-            {financeRows.map((row) => (
-              <div key={row.label}>
-                <span>{row.label}</span>
-                <strong>{formatFcfa(row.value)}</strong>
-                <i style={{ '--bar-width': `${row.percent}%` }}></i>
-              </div>
-            ))}
-          </div>
-        </article>
-        <article className="chart-panel compact">
-          <div className="panel-heading">
-            <strong>Repartition</strong>
-            <span>Budget</span>
-          </div>
-          <div className="donut-chart budget" aria-hidden="true"></div>
-          <ul className="chart-legend">
-            <li>Production</li>
-            <li>Technique</li>
-            <li>Communication</li>
-          </ul>
-        </article>
-      </section>
+      <FinanceWorkspacePage />
     </section>
   )
 }
@@ -2960,32 +3434,113 @@ function TeamPage({ pendingCount }) {
   )
 }
 
+function BudgetWorkspacePage() {
+  const [summary, setSummary] = useState(null)
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+
+    api
+      .getFinanceSummary()
+      .then((result) => {
+        if (isMounted) {
+          setSummary(result)
+        }
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const approvedPercent = Math.min(
+    100,
+    ((summary?.totals.approvedBudgetFcfa ?? 0) /
+      Math.max(summary?.totals.plannedBudgetFcfa ?? 1, 1)) *
+      100,
+  )
+
+  return (
+    <>
+      {notice && <p className="auth-notice">{notice}</p>}
+      <div className="budget-grid">
+        <article className="visual-panel">
+          <p className="eyebrow">Budget previsionnel</p>
+          <strong className="big-money">{formatFcfa(summary?.totals.plannedBudgetFcfa ?? 0)}</strong>
+          <div className="budget-meter">
+            <span style={{ '--progress': `${approvedPercent}%` }}></span>
+          </div>
+          <p>{formatFcfa(summary?.totals.approvedBudgetFcfa ?? 0)} deja valide par l'Admin.</p>
+        </article>
+        <article className="visual-panel">
+          <p className="eyebrow">Depenses reelles</p>
+          <strong className="big-money">{formatFcfa(summary?.totals.actualExpensesFcfa ?? 0)}</strong>
+          <ul className="compact-list">
+            <li>
+              <span>Paiements effectues</span>
+              <strong>{formatFcfa(summary?.totals.paidFcfa ?? 0)}</strong>
+            </li>
+            <li>
+              <span>Paiements en attente</span>
+              <strong>{formatFcfa(summary?.totals.pendingPaymentsFcfa ?? 0)}</strong>
+            </li>
+            <li>
+              <span>Depassement</span>
+              <strong>{formatFcfa(summary?.totals.overBudgetFcfa ?? 0)}</strong>
+            </li>
+          </ul>
+        </article>
+      </div>
+      <section className="settings-card">
+        <div className="settings-panel-heading">
+          <div>
+            <p className="eyebrow">Alertes budget</p>
+            <h2>Evenements au-dessus de la limite.</h2>
+          </div>
+        </div>
+        {isLoading ? (
+          <p className="approval-empty">Chargement des budgets...</p>
+        ) : summary?.alerts.length ? (
+          <ul className="compact-list">
+            {summary.alerts.map((event) => (
+              <li key={event.eventId}>
+                <span>{event.title}</span>
+                <strong>
+                  {formatFcfa(event.actualExpensesFcfa)} / {formatFcfa(event.limitFcfa)}
+                </strong>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="approval-empty">Aucun depassement budgetaire detecte.</p>
+        )}
+      </section>
+    </>
+  )
+}
+
 function BudgetPage() {
   return (
     <section className="module-page">
       <ModuleHeader
-        description="Visualisez les enveloppes, les engagements et les budgets a valider."
+        description="Visualisez les enveloppes, les engagements, les validations Admin et les depassements."
         icon={Banknote}
         label="Budget"
         title="Budget."
       />
-      <div className="budget-grid">
-        <article className="visual-panel">
-          <p className="eyebrow">Enveloppe annuelle</p>
-          <strong className="big-money">{formatFcfa(120000000)}</strong>
-          <div className="budget-meter"><span style={{ '--progress': '64%' }}></span></div>
-          <p>64% consommes sur les operations confirmees.</p>
-        </article>
-        <article className="visual-panel">
-          <p className="eyebrow">A valider</p>
-          <strong className="big-money">{formatFcfa(7400000)}</strong>
-          <ul className="compact-list">
-            <li><span>Technique</span><strong>{formatFcfa(3200000)}</strong></li>
-            <li><span>Communication</span><strong>{formatFcfa(2100000)}</strong></li>
-            <li><span>Logistique</span><strong>{formatFcfa(2100000)}</strong></li>
-          </ul>
-        </article>
-      </div>
+      <BudgetWorkspacePage />
     </section>
   )
 }
