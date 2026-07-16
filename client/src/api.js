@@ -295,4 +295,65 @@ export const api = {
     request(`/finance/documents/${documentId}`, {
       method: 'DELETE',
     }),
+  getWorkflows: () => request('/workflows'),
+  getWorkflow: (workflowId) => request(`/workflows/${workflowId}`),
+  createWorkflow: (payload) =>
+    request('/workflows', {
+      method: 'POST',
+      body: payload,
+    }),
+  addWorkflowBudget: (workflowId, payload) =>
+    request(`/workflows/${workflowId}/budget`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  assignWorkflowPeople: (workflowId, payload) =>
+    request(`/workflows/${workflowId}/assignees`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  approveWorkflow: (workflowId, payload = {}) =>
+    request(`/workflows/${workflowId}/approve`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  rejectWorkflow: (workflowId, payload = {}) =>
+    request(`/workflows/${workflowId}/reject`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  getNotifications: () => request('/notifications'),
+  getNotificationCount: () => request('/notifications/unread-count'),
+  markNotificationRead: (notificationId) =>
+    request(`/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+      body: {},
+    }),
+  sendEventReminders: () =>
+    request('/notifications/event-reminders', {
+      method: 'POST',
+      body: {},
+    }),
+  getHrOverview: () => request('/hr/overview'),
+  getHrStaff: () => request('/hr/staff'),
+  updateStaffProfile: (userId, payload) =>
+    request(`/hr/staff/${userId}/profile`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  createStaffContract: (userId, payload) =>
+    request(`/hr/staff/${userId}/contracts`, {
+      method: 'POST',
+      body: payload,
+    }),
+  createStaffDocument: (userId, payload) =>
+    request(`/hr/staff/${userId}/documents`, {
+      method: 'POST',
+      body: payload,
+    }),
+  createStaffMission: (userId, payload) =>
+    request(`/hr/staff/${userId}/missions`, {
+      method: 'POST',
+      body: payload,
+    }),
 }

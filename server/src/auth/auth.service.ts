@@ -7,7 +7,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
-import { AuditAction, AuthChallengeType, Prisma, RoleName, User, UserStatus } from '@prisma/client';
+import {
+  AuditAction,
+  AuthChallengeType,
+  NotificationStatus,
+  NotificationType,
+  Prisma,
+  RoleName,
+  User,
+  UserStatus,
+} from '@prisma/client';
 import { OAuth2Client } from 'google-auth-library';
 import { randomBytes, randomInt } from 'crypto';
 import * as speakeasy from 'speakeasy';
@@ -101,6 +110,7 @@ export class AuthService {
     const verification = await this.createEmailVerification(user.id, user.email);
 
     await this.audit(user.id, AuditAction.USER_REGISTERED, {});
+    await this.notifyAdminsAboutRegistration(user);
 
     return {
       message: 'Registration submitted. Waiting for admin approval.',
@@ -717,6 +727,53 @@ export class AuthService {
       emailDelivered: delivery.delivered,
       expiresAt,
     };
+  }
+
+  private async notifyAdminsAboutRegistration(user: User) {
+    const admins = await this.prisma.user.findMany({
+      where: {
+        status: { not: UserStatus.DISABLED },
+        roles: {
+          some: {
+            role: { name: RoleName.ADMIN },
+          },
+        },
+      },
+      select: { id: true, email: true },
+    });
+
+    for (const admin of admins) {
+      const message = `${user.lastName} ${user.firstName} vient de demander un acces M Group.`;
+      const delivery = await this.mail.send({
+        to: admin.email,
+        subject: 'Nouvelle inscription M Group',
+        text: message,
+        html: `<p>${message}</p>`,
+      });
+
+      await this.prisma.notification.create({
+        data: {
+          userId: admin.id,
+          type: NotificationType.USER_REGISTERED,
+          status: NotificationStatus.SENT,
+          title: 'Nouvelle demande utilisateur',
+          message,
+          channels: ['IN_APP', 'EMAIL', 'SOUND'],
+          actionUrl: '#validation',
+          sentAt: new Date(),
+          metadata: {
+            pendingUserId: user.id,
+            emailDelivered: delivery.delivered,
+            reason: delivery.reason ?? null,
+          },
+        },
+      });
+
+      await this.audit(admin.id, AuditAction.NOTIFICATION_SENT, {}, {
+        type: NotificationType.USER_REGISTERED,
+        pendingUserId: user.id,
+      });
+    }
   }
 
   private async createTwoFactorChallenge(user: UserWithRoles, metadata: AuthMetadata) {

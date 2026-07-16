@@ -9,6 +9,6 @@ import { SmsService } from './sms.service';
   imports: [JwtModule.register({})],
   controllers: [AuthController],
   providers: [AuthService, MailService, SmsService],
-  exports: [AuthService, JwtModule],
+  exports: [AuthService, JwtModule, MailService, SmsService],
 })
 export class AuthModule {}

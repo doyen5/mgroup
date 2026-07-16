@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   Copy,
   Eye,
+  FileText,
   History,
   Home,
   Layers,
@@ -18,6 +19,7 @@ import {
   MonitorCog,
   Smartphone,
   UserPlus,
+  UserCheck,
   Users,
   Volume2,
   VolumeX,
@@ -58,12 +60,6 @@ const availableRoles = [
   { value: 'ADMIN', label: 'Admin' },
 ]
 
-const eventRows = [
-  { title: 'Concert prive - Plateau', date: '22 juillet 2026', budget: 4500000, status: 'Production' },
-  { title: 'Conference partenaire', date: '28 juillet 2026', budget: 2800000, status: 'Validation' },
-  { title: 'Activation marque', date: '04 aout 2026', budget: 6200000, status: 'Brief client' },
-]
-
 const eventStatusOptions = [
   { value: 'DRAFT', label: 'Brouillon' },
   { value: 'IN_PREPARATION', label: 'En preparation' },
@@ -102,25 +98,105 @@ const financeDocumentTypes = [
   { value: 'OTHER', label: 'Autre' },
 ]
 
-const financeRows = [
-  { label: 'Cachets artistes', value: 9200000, percent: 58 },
-  { label: 'Technique et scene', value: 5400000, percent: 34 },
-  { label: 'Communication', value: 2700000, percent: 22 },
-  { label: 'Logistique', value: 3900000, percent: 28 },
+const workflowStatusOptions = [
+  { value: 'DRAFT', label: 'Brouillon' },
+  { value: 'PENDING_BUDGET', label: 'Budget attendu' },
+  { value: 'PENDING_RH', label: 'Affectation RH' },
+  { value: 'PENDING_ADMIN', label: 'Validation Admin' },
+  { value: 'APPROVED', label: 'Valide' },
+  { value: 'REJECTED', label: 'Refuse' },
+  { value: 'CANCELLED', label: 'Annule' },
 ]
 
-const teamRows = [
-  { role: 'Production', members: 8, load: 76 },
-  { role: 'Finance', members: 3, load: 42 },
-  { role: 'Commercial', members: 5, load: 61 },
-  { role: 'RH', members: 2, load: 35 },
+const workflowActionLabels = {
+  CREATED: 'Demande creee',
+  BUDGET_ADDED: 'Budget ajoute',
+  PEOPLE_ASSIGNED: 'Personnes affectees',
+  SUBMITTED_TO_ADMIN: 'Soumis a l Admin',
+  APPROVED: 'Validation Admin',
+  REJECTED: 'Refus Admin',
+  COMMENTED: 'Commentaire',
+}
+
+const notificationTypeLabels = {
+  USER_REGISTERED: 'Inscription',
+  BUDGET_PENDING: 'Budget a valider',
+  BUDGET_OVER_LIMIT: 'Depassement budget',
+  EVENT_REMINDER: 'Rappel evenement',
+  WORKFLOW_UPDATED: 'Workflow',
+  EVENT_UPCOMING: 'Evenement proche',
+}
+
+const staffAvailabilityOptions = [
+  { value: 'AVAILABLE', label: 'Disponible' },
+  { value: 'BUSY', label: 'Occupe' },
+  { value: 'UNAVAILABLE', label: 'Indisponible' },
+  { value: 'ON_LEAVE', label: 'En conge' },
 ]
 
-const alertRows = [
-  { title: 'Budget technique a valider', level: 'Haute', time: 'Aujourd hui 09:20' },
-  { title: 'Nouvelle demande utilisateur', level: 'Moyenne', time: 'Aujourd hui 08:42' },
-  { title: 'Facture prestataire en attente', level: 'Haute', time: 'Hier 18:10' },
+const staffContractTypes = [
+  { value: 'CDI', label: 'CDI' },
+  { value: 'CDD', label: 'CDD' },
+  { value: 'FREELANCE', label: 'Freelance' },
+  { value: 'STAGE', label: 'Stage' },
+  { value: 'PRESTATAIRE', label: 'Prestataire' },
+  { value: 'AUTRE', label: 'Autre' },
 ]
+
+const staffContractStatuses = [
+  { value: 'DRAFT', label: 'Brouillon' },
+  { value: 'ACTIVE', label: 'Actif' },
+  { value: 'EXPIRED', label: 'Expire' },
+  { value: 'TERMINATED', label: 'Termine' },
+]
+
+const staffDocumentTypes = [
+  { value: 'ID_CARD', label: 'Piece identite' },
+  { value: 'CONTRACT', label: 'Contrat' },
+  { value: 'CV', label: 'CV' },
+  { value: 'CERTIFICATE', label: 'Attestation' },
+  { value: 'ADMINISTRATIVE', label: 'Administratif' },
+  { value: 'OTHER', label: 'Autre' },
+]
+
+const staffMissionStatuses = [
+  { value: 'PLANNED', label: 'Planifiee' },
+  { value: 'IN_PROGRESS', label: 'En cours' },
+  { value: 'COMPLETED', label: 'Terminee' },
+  { value: 'CANCELLED', label: 'Annulee' },
+]
+
+const dashboardPanelCatalog = {
+  overview: { label: 'Vue generale', icon: Activity },
+  validation: { label: 'Inscriptions', icon: ClipboardCheck },
+  workflows: { label: 'Workflows', icon: Layers },
+  events: { label: 'Evenements', icon: CalendarDays },
+  finance: { label: 'Finances', icon: Wallet },
+  team: { label: 'Equipe / RH', icon: Users },
+  budget: { label: 'Budget', icon: Banknote },
+  alerts: { label: 'Alertes', icon: Bell },
+  settings: { label: 'Parametres', icon: MonitorCog },
+}
+
+const getDashboardPanelIds = (roleValues) => {
+  if (roleValues.includes('ADMIN')) {
+    return ['overview', 'validation', 'workflows', 'events', 'team', 'finance', 'budget', 'alerts', 'settings']
+  }
+
+  if (roleValues.includes('RH')) {
+    return ['overview', 'team', 'workflows', 'events', 'alerts', 'settings']
+  }
+
+  if (roleValues.includes('COMPTABLE')) {
+    return ['overview', 'finance', 'budget', 'workflows', 'events', 'alerts', 'settings']
+  }
+
+  if (roleValues.includes('COMMERCIAL')) {
+    return ['overview', 'workflows', 'events', 'alerts', 'settings']
+  }
+
+  return ['overview', 'events', 'alerts', 'settings']
+}
 
 // Formatage unique pour l'horloge, le toast et la derniere connexion.
 const formatDateTime = (date) =>
@@ -155,6 +231,31 @@ const paymentStatusLabel = (status) =>
 
 const financeDocumentLabel = (type) =>
   financeDocumentTypes.find((option) => option.value === type)?.label ?? type
+
+const workflowStatusLabel = (status) =>
+  workflowStatusOptions.find((option) => option.value === status)?.label ?? status
+
+const workflowActionLabel = (action) => workflowActionLabels[action] ?? action
+
+const notificationTypeLabel = (type) => notificationTypeLabels[type] ?? type
+
+const staffAvailabilityLabel = (availability) =>
+  staffAvailabilityOptions.find((option) => option.value === availability)?.label ?? availability
+
+const staffContractTypeLabel = (type) =>
+  staffContractTypes.find((option) => option.value === type)?.label ?? type
+
+const staffContractStatusLabel = (status) =>
+  staffContractStatuses.find((option) => option.value === status)?.label ?? status
+
+const staffDocumentTypeLabel = (type) =>
+  staffDocumentTypes.find((option) => option.value === type)?.label ?? type
+
+const staffMissionStatusLabel = (status) =>
+  staffMissionStatuses.find((option) => option.value === status)?.label ?? status
+
+const userDisplayName = (user) =>
+  `${user?.lastName ?? ''} ${user?.firstName ?? ''}`.trim() || user?.email || 'Utilisateur'
 
 // Lecture securisee d'un champ de formulaire HTML.
 const getFormValue = (formData, name) => String(formData.get(name) ?? '').trim()
@@ -1561,11 +1662,11 @@ function AdminSetupWizard({ onGoDashboard, onGoHome, onSetupComplete }) {
         ) : (
           <>
             <div className="setup-heading">
-              <p className="eyebrow">Compte patron</p>
-              <h2>Creer le premier compte administrateur.</h2>
+              <p className="eyebrow">Administrateur</p>
+              <h2>Renseigner les informations du patron.</h2>
               <p>
-                Ce compte sera cree en statut FORCE_PASSWORD_CHANGE pour forcer un nouveau mot de
-                passe avant le dashboard.
+                Ce compte deviendra le premier Admin et devra changer son mot de passe apres
+                connexion.
               </p>
             </div>
             {setupMessage && <p className="auth-notice error">{setupMessage}</p>}
@@ -1579,33 +1680,27 @@ function AdminSetupWizard({ onGoDashboard, onGoHome, onSetupComplete }) {
                 <div className="form-grid">
                   <label>
                     Nom
-                    <input name="adminLastName" type="text" placeholder="Votre nom" required />
+                    <input name="adminLastName" type="text" placeholder="Nom" required />
                   </label>
                   <label>
                     Prenom(s)
-                    <input name="adminFirstName" type="text" placeholder="Vos prenoms" required />
+                    <input name="adminFirstName" type="text" placeholder="Prenom(s)" required />
                   </label>
                   <label>
                     Adresse
-                    <input name="adminAddress" type="text" placeholder="Votre adresse" required />
-                  </label>
-                  <label>
-                    Email
-                    <input name="adminEmail" type="email" placeholder="admin@mgroup.ci" required />
+                    <input name="adminAddress" type="text" placeholder="Adresse" required />
                   </label>
                   <label>
                     Contact
                     <input name="adminPhone" type="tel" placeholder="+225 00 00 00 00 00" required />
                   </label>
                   <label>
-                    Mot de passe initial
-                    <input
-                      name="adminPassword"
-                      type="password"
-                      placeholder="Mot de passe provisoire"
-                      minLength={8}
-                      required
-                    />
+                    Email
+                    <input name="adminEmail" type="email" placeholder="admin@mgroup.ci" required />
+                  </label>
+                  <label>
+                    Mot de passe
+                    <input name="adminPassword" type="password" minLength="10" required />
                   </label>
                   <label>
                     Photo
@@ -1622,7 +1717,7 @@ function AdminSetupWizard({ onGoDashboard, onGoHome, onSetupComplete }) {
                   Retour entreprise
                 </button>
                 <button type="submit" className="primary-button" disabled={isSubmitting}>
-                  {isSubmitting ? 'Enregistrement...' : 'Enregistrer'}
+                  {isSubmitting ? 'Enregistrement...' : 'Terminer la configuration'}
                 </button>
               </div>
             </form>
@@ -1755,12 +1850,43 @@ function DashboardView({
   const [deliveryInfo, setDeliveryInfo] = useState(null)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [soundNotice, setSoundNotice] = useState('')
+  const [notificationCount, setNotificationCount] = useState(0)
   const audioContextRef = useRef(null)
   const soundTimeoutRef = useRef(null)
   const didLoadPendingRef = useRef(false)
   const previousPendingCountRef = useRef(0)
+  const didLoadNotificationsRef = useRef(false)
+  const previousNotificationCountRef = useRef(0)
   const roleKey = useMemo(() => user.roleValues.join('|'), [user.roleValues])
   const isAdmin = user.roleValues.includes('ADMIN')
+  const panelIds = useMemo(() => getDashboardPanelIds(user.roleValues), [user.roleValues])
+  const activePanelId = panelIds.includes(activePanel) ? activePanel : panelIds[0]
+  const dashboardIdentity = useMemo(() => {
+    if (isAdmin) {
+      return {
+        ariaLabel: 'Dashboard Admin M Group',
+        brand: 'Le Boss Molare',
+        sidebarLabel: 'Le Boss',
+        sidebarName: 'Molare',
+      }
+    }
+
+    if (user.roleValues.includes('RH')) {
+      return {
+        ariaLabel: 'Dashboard RH M Group',
+        brand: 'M Group RH',
+        sidebarLabel: 'Espace',
+        sidebarName: 'RH',
+      }
+    }
+
+    return {
+      ariaLabel: `Dashboard ${user.role}`,
+      brand: `M Group ${user.role}`,
+      sidebarLabel: 'M Group',
+      sidebarName: user.role,
+    }
+  }, [isAdmin, user.role, user.roleValues])
 
   const playAdminSound = useCallback(
     (message = 'Action admin detectee') => {
@@ -1857,6 +1983,48 @@ function DashboardView({
     }
   }, [isAdmin, pendingUsers.length, playAdminSound])
 
+  // Le compteur de notifications est rafraichi regulierement pour declencher la cloche sonore.
+  useEffect(() => {
+    let isMounted = true
+
+    const loadNotificationCount = async () => {
+      try {
+        const result = await api.getNotificationCount()
+
+        if (!isMounted) {
+          return
+        }
+
+        const nextCount = result.count ?? 0
+        setNotificationCount(nextCount)
+
+        if (!didLoadNotificationsRef.current) {
+          didLoadNotificationsRef.current = true
+          previousNotificationCountRef.current = nextCount
+          return
+        }
+
+        if (nextCount > previousNotificationCountRef.current) {
+          playAdminSound('Nouvelle notification')
+        }
+
+        previousNotificationCountRef.current = nextCount
+      } catch {
+        if (isMounted) {
+          setNotificationCount(0)
+        }
+      }
+    }
+
+    loadNotificationCount()
+    const intervalId = window.setInterval(loadNotificationCount, 30000)
+
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+    }
+  }, [playAdminSound, roleKey])
+
   const approveUser = async (pendingUser) => {
     const role = selectedRoles[pendingUser.id] ?? 'SECRETAIRE'
     const roleLabel = availableRoles.find((item) => item.value === role)?.label ?? role
@@ -1910,83 +2078,35 @@ function DashboardView({
   }
 
   return (
-    <section className="admin-layout" aria-label="Dashboard administrateur">
-      {/* Sidebar admin : navigation principale toujours visible a gauche. */}
-      <aside className="admin-sidebar" aria-label="Menu administrateur">
+    <section className="admin-layout" aria-label={dashboardIdentity.ariaLabel}>
+      {/* Sidebar dashboard : navigation principale toujours visible a gauche. */}
+      <aside className="admin-sidebar" aria-label="Menu dashboard">
         <div className="sidebar-logo">
           <img src="/mgroup-logo.svg" alt="Logo M Group" />
         </div>
         <div className="sidebar-project">
-          <span>Le Boss</span>
-          <strong>Molare</strong>
+          <span>{dashboardIdentity.sidebarLabel}</span>
+          <strong>{dashboardIdentity.sidebarName}</strong>
         </div>
         <nav className="sidebar-menu">
-          <a
-            className={activePanel === 'overview' ? 'active' : ''}
-            href="#dashboard"
-            onClick={() => setActivePanel('overview')}
-          >
-            <span>▣</span>
-            Overview
-          </a>
-          <a
-            className={activePanel === 'validation' ? 'active' : ''}
-            href="#validation"
-            onClick={() => setActivePanel('validation')}
-          >
-            <span>●</span>
-            Inscriptions
-          </a>
-          <a
-            className={activePanel === 'events' ? 'active' : ''}
-            href="#events"
-            onClick={() => setActivePanel('events')}
-          >
-            <span>◆</span>
-            Evenements
-          </a>
-          <a
-            className={activePanel === 'finance' ? 'active' : ''}
-            href="#finance"
-            onClick={() => setActivePanel('finance')}
-          >
-            <span>▥</span>
-            Finances
-          </a>
-          <a
-            className={activePanel === 'team' ? 'active' : ''}
-            href="#team"
-            onClick={() => setActivePanel('team')}
-          >
-            <span>◉</span>
-            Equipe
-          </a>
-          <button
-            type="button"
-            className={activePanel === 'budget' ? 'active' : ''}
-            onClick={() => setActivePanel('budget')}
-          >
-            <Banknote size={17} aria-hidden="true" />
-            Budget
-          </button>
-          <button
-            type="button"
-            className={activePanel === 'alerts' ? 'active' : ''}
-            onClick={() => setActivePanel('alerts')}
-          >
-            <Bell size={17} aria-hidden="true" />
-            Alertes
-          </button>
-          <button
-            type="button"
-            className={activePanel === 'settings' ? 'active' : ''}
-            onClick={() => setActivePanel('settings')}
-          >
-            <span>⚙</span>
-            Parametres
-          </button>
+          {panelIds.map((panelId) => {
+            const panel = dashboardPanelCatalog[panelId]
+            const Icon = panel.icon
+
+            return (
+              <button
+                type="button"
+                className={activePanelId === panelId ? 'active' : ''}
+                key={panelId}
+                onClick={() => setActivePanel(panelId)}
+              >
+                <Icon size={17} aria-hidden="true" />
+                {panel.label}
+              </button>
+            )
+          })}
           <button type="button" onClick={onRequestLogout}>
-            <span>↪</span>
+            <LogOut size={17} aria-hidden="true" />
             Deconnexion
           </button>
         </nav>
@@ -1994,11 +2114,11 @@ function DashboardView({
 
       <section className="dashboard-shell admin-main">
         <header className="dashboard-header admin-topbar">
-          <a className="brand dark dashboard-brand" href="#dashboard" aria-label="Dashboard M Group">
+          <a className="brand dark dashboard-brand" href="#dashboard" aria-label={dashboardIdentity.ariaLabel}>
             <span className="dashboard-logo">
               <img src="/mgroup-logo.svg" alt="" />
             </span>
-            <span>Le Boss Molare</span>
+            <span>{dashboardIdentity.brand}</span>
           </a>
           <div className="dashboard-actions">
             <time className="time-chip" dateTime={now.toISOString()}>
@@ -2038,7 +2158,7 @@ function DashboardView({
           )}
         </section>
 
-        {activePanel === 'settings' ? (
+        {activePanelId === 'settings' ? (
           <SettingsPanel
             user={user}
             onAdminEvent={playAdminSound}
@@ -2046,7 +2166,7 @@ function DashboardView({
             onProfileUpdate={onProfileUpdate}
             onRequestLogout={onRequestLogout}
           />
-        ) : activePanel === 'validation' ? (
+        ) : activePanelId === 'validation' ? (
           <ValidationPage
             dashboardError={dashboardError}
             isApproving={isApproving}
@@ -2059,149 +2179,33 @@ function DashboardView({
             setSelectedRoles={setSelectedRoles}
             successMessage={approvalFeedback}
           />
-        ) : activePanel === 'events' ? (
+        ) : activePanelId === 'workflows' ? (
+          <WorkflowPage onWorkflowEvent={playAdminSound} user={user} />
+        ) : activePanelId === 'events' ? (
           <EventsPage />
-        ) : activePanel === 'finance' ? (
+        ) : activePanelId === 'finance' ? (
           <FinancePage />
-        ) : activePanel === 'team' ? (
-          <TeamPage pendingCount={pendingUsers.length} />
-        ) : activePanel === 'budget' ? (
+        ) : activePanelId === 'team' ? (
+          <TeamPage onHrEvent={playAdminSound} pendingCount={pendingUsers.length} user={user} />
+        ) : activePanelId === 'budget' ? (
           <BudgetPage />
-        ) : activePanel === 'alerts' ? (
+        ) : activePanelId === 'alerts' ? (
           <AlertsPage
+            notificationCount={notificationCount}
+            onNotificationsChanged={setNotificationCount}
             onTestSound={() => playAdminSound('Test alerte sonore')}
             onToggleSound={toggleSound}
             soundEnabled={soundEnabled}
           />
         ) : (
-          <>
-        <div id="dashboard" className="dashboard-hero admin-dashboard-title">
-          <p className="eyebrow">Dashboard {user.role}</p>
-          <h1>Pilotage global.</h1>
-          <p>
-            Suivez les indicateurs, les inscriptions et les actions prioritaires de M Group depuis
-            un seul espace.
-          </p>
-        </div>
-
-        <div className="insight-grid" id="events">
-          {/* Cartes rapides inspirees du modele fourni : lisibles et colorees. */}
-          <article className="insight-card blue">
-            <span className="insight-icon">✦</span>
-            <strong>12</strong>
-            <p>Evenements</p>
-          </article>
-          <article className="insight-card cyan">
-            <span className="insight-icon">●</span>
-            <strong>{pendingUsers.length}</strong>
-            <p>Inscriptions</p>
-          </article>
-          <article className="insight-card yellow">
-            <span className="insight-icon">▥</span>
-            <strong>3</strong>
-            <p>Budgets</p>
-          </article>
-          <article className="insight-card coral">
-            <span className="insight-icon">!</span>
-            <strong>4</strong>
-            <p>Alertes</p>
-          </article>
-        </div>
-
-        <section className="analytics-grid" aria-label="Statistiques dashboard">
-          <article className="chart-panel wide">
-            <div className="panel-heading">
-              <strong>Activite evenementielle</strong>
-              <span>+43% cette saison</span>
-            </div>
-            <div className="bar-chart" aria-hidden="true">
-              {[36, 54, 42, 68, 48, 76, 58, 71, 63, 82, 55, 66].map((height, index) => (
-                <span key={index} style={{ '--bar-height': `${height}%` }}></span>
-              ))}
-            </div>
-          </article>
-          <article className="chart-panel compact" id="finance">
-            <div className="panel-heading">
-              <strong>Repartition</strong>
-              <span>Operations</span>
-            </div>
-            <div className="donut-chart" aria-hidden="true"></div>
-            <ul className="chart-legend">
-              <li>Production</li>
-              <li>Finance</li>
-              <li>RH</li>
-            </ul>
-          </article>
-        </section>
-
-        <DashboardInsightBoard pendingCount={pendingUsers.length} onOpenPanel={setActivePanel} />
-
-        {isAdmin && (
-          <section id="validation" className="approval-panel" aria-label="Demandes d'inscription">
-            <div>
-              <p className="eyebrow">Validation admin</p>
-              <h2>Attribuer un role avant activation.</h2>
-            </div>
-
-            {dashboardError && <p className="auth-notice error">{dashboardError}</p>}
-            {approvalFeedback && <p className="auth-notice success">{approvalFeedback}</p>}
-
-            {pendingUsers.length === 0 ? (
-              <p className="approval-empty">Aucune demande d'inscription en attente.</p>
-            ) : (
-              pendingUsers.map((pendingUser) => (
-                <div className="approval-row" key={pendingUser.id}>
-                  <div>
-                    <strong>{`${pendingUser.lastName} ${pendingUser.firstName}`}</strong>
-                    <span>{pendingUser.email}</span>
-                  </div>
-                  <select
-                    aria-label="Role a attribuer"
-                    value={selectedRoles[pendingUser.id] ?? 'SECRETAIRE'}
-                    onChange={(event) =>
-                      setSelectedRoles((current) => ({
-                        ...current,
-                        [pendingUser.id]: event.target.value,
-                      }))
-                    }
-                  >
-                    {availableRoles.map((role) => (
-                      <option key={role.value} value={role.value}>
-                        {role.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="approval-actions">
-                    <button
-                      type="button"
-                      className="secondary-button bordered"
-                      onClick={() => setReviewUser(pendingUser)}
-                    >
-                      Voir
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={isApproving}
-                      onClick={() => approveUser(pendingUser)}
-                    >
-                      Confirmer
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-button"
-                      disabled={isCancelling}
-                      onClick={() => setCancelUser(pendingUser)}
-                    >
-                      Annuler
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </section>
-        )}
-          </>
+          <RoleOverviewPage
+            dashboardError={dashboardError}
+            isAdmin={isAdmin}
+            notificationCount={notificationCount}
+            onOpenPanel={setActivePanel}
+            pendingUsers={pendingUsers}
+            user={user}
+          />
         )}
       </section>
 
@@ -2232,59 +2236,253 @@ function DashboardView({
   )
 }
 
-function DashboardInsightBoard({ onOpenPanel, pendingCount }) {
-  return (
-    <section className="dashboard-insights" aria-label="Synthese globale">
-      <article className="visual-panel finance-summary">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Budget FCFA</p>
-            <strong>{formatFcfa(18500000)}</strong>
-          </div>
-          <Wallet size={26} aria-hidden="true" />
-        </div>
-        <div className="stacked-budget" aria-hidden="true">
-          {financeRows.map((item) => (
-            <span key={item.label} style={{ '--segment': `${item.percent}%` }}></span>
-          ))}
-        </div>
-        <ul className="compact-list">
-          {financeRows.slice(0, 3).map((item) => (
-            <li key={item.label}>
-              <span>{item.label}</span>
-              <strong>{formatFcfa(item.value)}</strong>
-            </li>
-          ))}
-        </ul>
-      </article>
+function RoleOverviewPage({
+  dashboardError,
+  isAdmin,
+  notificationCount,
+  onOpenPanel,
+  pendingUsers,
+  user,
+}) {
+  const [overview, setOverview] = useState({
+    events: [],
+    finance: null,
+    hr: null,
+    workflows: [],
+  })
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const isRh = user.roleValues.includes('RH')
 
-      <article className="visual-panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Operations</p>
-            <strong>Vue instantanee</strong>
+  useEffect(() => {
+    let isMounted = true
+    const requests = [
+      api.getEvents().catch(() => []),
+      api.getWorkflows().catch(() => []),
+      isAdmin ? api.getFinanceSummary().catch(() => null) : Promise.resolve(null),
+      isAdmin || isRh ? api.getHrOverview().catch(() => null) : Promise.resolve(null),
+    ]
+
+    Promise.all(requests)
+      .then(([events, workflows, finance, hr]) => {
+        if (!isMounted) {
+          return
+        }
+
+        setOverview({ events, workflows, finance, hr })
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [isAdmin, isRh, user.roleValues])
+
+  const pendingAdminWorkflows = overview.workflows.filter(
+    (workflow) => workflow.status === 'PENDING_ADMIN',
+  )
+  const pendingRhWorkflows = overview.workflows.filter((workflow) => workflow.status === 'PENDING_RH')
+  const eventBars = overview.events.length
+    ? overview.events.slice(0, 12).map((event, index) => 30 + ((index + event.title.length) % 9) * 7)
+    : [36, 54, 42, 68, 48, 76, 58, 71]
+
+  if (isRh && !isAdmin) {
+    return (
+      <section className="role-overview">
+        <OverviewHero
+          eyebrow="Dashboard RH"
+          title="Pilotage RH operationnel."
+          description="Suivez les disponibilites, dossiers du personnel, affectations et workflows RH depuis une vue claire."
+        />
+        {notice && <p className="auth-notice">{notice}</p>}
+        <OverviewKpis
+          cards={[
+            { label: 'Personnel actif', value: overview.hr?.totals.personnel ?? 0, icon: Users, tone: 'blue' },
+            { label: 'Disponibles', value: overview.hr?.totals.available ?? 0, icon: UserCheck, tone: 'cyan' },
+            {
+              label: 'Workflows RH',
+              value: pendingRhWorkflows.length,
+              icon: Layers,
+              tone: 'yellow',
+            },
+            { label: 'Alertes', value: notificationCount, icon: Bell, tone: 'coral' },
+          ]}
+        />
+        <section className="role-action-grid" aria-label="Actions rapides RH">
+          <RoleActionCard
+            icon={Users}
+            title="Dossiers du personnel"
+            text="Disponibilites, contrats, documents administratifs et missions."
+            onClick={() => onOpenPanel('team')}
+          />
+          <RoleActionCard
+            icon={Layers}
+            title="Affectations a traiter"
+            text={`${pendingRhWorkflows.length} demande(s) attendent une affectation RH.`}
+            onClick={() => onOpenPanel('workflows')}
+          />
+          <RoleActionCard
+            icon={CalendarDays}
+            title="Evenements"
+            text={`${overview.events.length} evenement(s) visibles pour organiser les equipes.`}
+            onClick={() => onOpenPanel('events')}
+          />
+        </section>
+        <section className="analytics-grid" aria-label="Synthese RH">
+          <article className="chart-panel wide">
+            <div className="panel-heading">
+              <strong>Disponibilite du personnel</strong>
+              <span>{isLoading ? 'Chargement...' : 'Vue temps reel'}</span>
+            </div>
+            <div className="availability-strip" aria-hidden="true">
+              {(overview.hr?.staff ?? []).slice(0, 10).map((staff) => (
+                <span
+                  className={(staff.profile?.availability ?? 'AVAILABLE').toLowerCase()}
+                  key={staff.id}
+                  title={userDisplayName(staff)}
+                ></span>
+              ))}
+            </div>
+            <ul className="compact-list">
+              {(overview.hr?.staff ?? []).slice(0, 5).map((staff) => (
+                <li key={staff.id}>
+                  <span>{userDisplayName(staff)}</span>
+                  <strong>{staffAvailabilityLabel(staff.profile?.availability ?? 'AVAILABLE')}</strong>
+                </li>
+              ))}
+              {!overview.hr?.staff?.length && <li>Aucun personnel charge.</li>}
+            </ul>
+          </article>
+          <article className="chart-panel compact">
+            <div className="panel-heading">
+              <strong>Missions</strong>
+              <span>A venir</span>
+            </div>
+            <div className="donut-chart rh" aria-hidden="true"></div>
+            <strong className="overview-big-number">{overview.hr?.totals.missionsUpcoming ?? 0}</strong>
+          </article>
+        </section>
+      </section>
+    )
+  }
+
+  return (
+    <section className="role-overview">
+      <OverviewHero
+        eyebrow="Dashboard Admin"
+        title="Centre de commandement M Group."
+        description="Validez les acces, controlez les budgets, suivez les workflows et gardez la production sous surveillance."
+      />
+      {(notice || dashboardError) && <p className="auth-notice">{notice || dashboardError}</p>}
+      <OverviewKpis
+        cards={[
+          { label: 'Inscriptions', value: pendingUsers.length, icon: UserPlus, tone: 'blue' },
+          { label: 'Evenements', value: overview.events.length, icon: CalendarDays, tone: 'cyan' },
+          { label: 'Budgets en alerte', value: overview.finance?.alerts.length ?? 0, icon: Banknote, tone: 'yellow' },
+          { label: 'Alertes', value: notificationCount, icon: Bell, tone: 'coral' },
+        ]}
+      />
+      <section className="analytics-grid" aria-label="Pilotage admin">
+        <article className="chart-panel wide">
+          <div className="panel-heading">
+            <strong>Activite evenementielle</strong>
+            <span>{overview.events.length} evenement(s)</span>
           </div>
-          <Activity size={26} aria-hidden="true" />
-        </div>
-        <div className="ops-grid">
-          <button type="button" onClick={() => onOpenPanel('validation')}>
-            <UserPlus size={20} />
-            <strong>{pendingCount}</strong>
-            <span>inscriptions</span>
-          </button>
-          <button type="button" onClick={() => onOpenPanel('events')}>
-            <CalendarDays size={20} />
-            <strong>{eventRows.length}</strong>
-            <span>evenements</span>
-          </button>
-          <button type="button" onClick={() => onOpenPanel('alerts')}>
-            <Bell size={20} />
-            <strong>{alertRows.length}</strong>
-            <span>alertes</span>
-          </button>
-        </div>
-      </article>
+          <div className="bar-chart" aria-hidden="true">
+            {eventBars.map((height, index) => (
+              <span key={index} style={{ '--bar-height': `${height}%` }}></span>
+            ))}
+          </div>
+        </article>
+        <article className="chart-panel compact">
+          <div className="panel-heading">
+            <strong>Budget global</strong>
+            <span>FCFA</span>
+          </div>
+          <div className="donut-chart budget" aria-hidden="true"></div>
+          <strong className="overview-big-number">
+            {formatFcfa(overview.finance?.totals.approvedBudgetFcfa ?? 0)}
+          </strong>
+        </article>
+      </section>
+      <section className="role-action-grid" aria-label="Actions rapides Admin">
+        <RoleActionCard
+          icon={ClipboardCheck}
+          title="Valider les inscriptions"
+          text={`${pendingUsers.length} demande(s) attendent une decision Admin.`}
+          onClick={() => onOpenPanel('validation')}
+        />
+        <RoleActionCard
+          icon={Layers}
+          title="Decisions workflow"
+          text={`${pendingAdminWorkflows.length} workflow(s) attendent validation ou refus.`}
+          onClick={() => onOpenPanel('workflows')}
+        />
+        <RoleActionCard
+          icon={Wallet}
+          title="Controle financier"
+          text={`${formatFcfa(overview.finance?.totals.pendingPaymentsFcfa ?? 0)} en paiements a suivre.`}
+          onClick={() => onOpenPanel('finance')}
+        />
+        <RoleActionCard
+          icon={Users}
+          title="Equipe et RH"
+          text={`${overview.hr?.totals.personnel ?? 0} profil(s) actifs dans le personnel.`}
+          onClick={() => onOpenPanel('team')}
+        />
+      </section>
     </section>
+  )
+}
+
+function OverviewHero({ description, eyebrow, title }) {
+  return (
+    <div id="dashboard" className="dashboard-hero admin-dashboard-title role-hero">
+      <p className="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </div>
+  )
+}
+
+function OverviewKpis({ cards }) {
+  return (
+    <div className="insight-grid role-kpi-grid">
+      {cards.map((card) => {
+        const Icon = card.icon
+
+        return (
+          <article className={`insight-card ${card.tone}`} key={card.label}>
+            <span className="insight-icon">
+              <Icon size={21} aria-hidden="true" />
+            </span>
+            <strong>{card.value}</strong>
+            <p>{card.label}</p>
+          </article>
+        )
+      })}
+    </div>
+  )
+}
+
+function RoleActionCard({ icon: Icon, onClick, text, title }) {
+  return (
+    <button type="button" className="role-action-card" onClick={onClick}>
+      <span>
+        <Icon size={22} aria-hidden="true" />
+      </span>
+      <strong>{title}</strong>
+      <small>{text}</small>
+    </button>
   )
 }
 
@@ -3404,32 +3602,494 @@ function FinancePage() {
   )
 }
 
-function TeamPage({ pendingCount }) {
+function TeamPage({ onHrEvent, pendingCount, user }) {
+  const canManageHr = user.roleValues.includes('RH') || user.roleValues.includes('ADMIN')
+  const [overview, setOverview] = useState(null)
+  const [events, setEvents] = useState([])
+  const [selectedStaffId, setSelectedStaffId] = useState('')
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(canManageHr)
+  const [isSaving, setIsSaving] = useState(false)
+  const staffRows = overview?.staff ?? []
+  const selectedStaff =
+    staffRows.find((staff) => staff.id === selectedStaffId) ?? staffRows[0] ?? null
+
+  const refreshHr = useCallback(async () => {
+    if (!canManageHr) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    setNotice('')
+
+    try {
+      const [nextOverview, nextEvents] = await Promise.all([
+        api.getHrOverview(),
+        api.getEvents().catch(() => []),
+      ])
+      setOverview(nextOverview)
+      setEvents(nextEvents)
+      setSelectedStaffId((current) => current || nextOverview.staff[0]?.id || '')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [canManageHr])
+
+  useEffect(() => {
+    if (!canManageHr) {
+      return undefined
+    }
+
+    let isMounted = true
+
+    Promise.all([api.getHrOverview(), api.getEvents().catch(() => [])])
+      .then(([nextOverview, nextEvents]) => {
+        if (!isMounted) {
+          return
+        }
+
+        setOverview(nextOverview)
+        setEvents(nextEvents)
+        setSelectedStaffId(nextOverview.staff[0]?.id || '')
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [canManageHr])
+
+  const syncHrAction = async (message) => {
+    await refreshHr()
+    setNotice(message)
+    onHrEvent(message)
+  }
+
+  const submitProfile = async (event) => {
+    event.preventDefault()
+
+    if (!selectedStaff) {
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.updateStaffProfile(selectedStaff.id, {
+        internalRole: getFormValue(formData, 'internalRole'),
+        department: getFormValue(formData, 'department'),
+        availability: getFormValue(formData, 'availability') || 'AVAILABLE',
+        availabilityNotes: getFormValue(formData, 'availabilityNotes'),
+        emergencyContact: getFormValue(formData, 'emergencyContact'),
+        hireDate: getFormValue(formData, 'hireDate'),
+      })
+      await syncHrAction('Profil RH mis a jour.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitContract = async (event) => {
+    event.preventDefault()
+
+    if (!selectedStaff) {
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.createStaffContract(selectedStaff.id, {
+        title: getFormValue(formData, 'title'),
+        type: getFormValue(formData, 'type') || 'AUTRE',
+        status: getFormValue(formData, 'status') || 'ACTIVE',
+        startsAt: getFormValue(formData, 'startsAt'),
+        endsAt: getFormValue(formData, 'endsAt'),
+        salaryFcfa: Number(getFormValue(formData, 'salaryFcfa') || 0),
+        fileUrl: getFormValue(formData, 'fileUrl'),
+        notes: getFormValue(formData, 'notes'),
+      })
+      event.currentTarget.reset()
+      await syncHrAction('Contrat ajoute au dossier RH.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitDocument = async (event) => {
+    event.preventDefault()
+
+    if (!selectedStaff) {
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const file = formData.get('file')
+      const fileUrl = await fileToDataUrl(file)
+      await api.createStaffDocument(selectedStaff.id, {
+        label: getFormValue(formData, 'label'),
+        type: getFormValue(formData, 'type') || 'OTHER',
+        url: fileUrl || getFormValue(formData, 'url'),
+        fileName: file instanceof File ? file.name : undefined,
+        mimeType: file instanceof File ? file.type : undefined,
+      })
+      event.currentTarget.reset()
+      await syncHrAction('Document administratif ajoute.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitMission = async (event) => {
+    event.preventDefault()
+
+    if (!selectedStaff) {
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.createStaffMission(selectedStaff.id, {
+        title: getFormValue(formData, 'title'),
+        eventId: getFormValue(formData, 'eventId'),
+        roleNote: getFormValue(formData, 'roleNote'),
+        status: getFormValue(formData, 'status') || 'PLANNED',
+        startsAt: getFormValue(formData, 'startsAt'),
+        endsAt: getFormValue(formData, 'endsAt'),
+        notes: getFormValue(formData, 'notes'),
+      })
+      event.currentTarget.reset()
+      await syncHrAction('Mission affectee au personnel.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <section className="module-page">
       <ModuleHeader
-        description="Controlez la charge des equipes, les roles et les validations RH."
+        description="Gerez le personnel, les disponibilites, contrats, documents administratifs et missions evenementielles."
         icon={Users}
-        label="Equipe"
-        title="Equipe."
+        label={canManageHr ? 'Dashboard RH' : 'Equipe'}
+        title={canManageHr ? 'Equipe et RH.' : 'Equipe.'}
       />
-      <div className="module-grid">
-        {teamRows.map((team) => (
-          <article className="module-card" key={team.role}>
-            <span className="card-icon"><Users size={20} /></span>
-            <h3>{team.role}</h3>
-            <p>{team.members} membre(s)</p>
-            <div className="progress-line"><span style={{ '--progress': `${team.load}%` }}></span></div>
-            <small>Charge {team.load}%</small>
-          </article>
-        ))}
-        <article className="module-card highlight">
-          <span className="card-icon"><UserPlus size={20} /></span>
-          <h3>Demandes a traiter</h3>
-          <strong>{pendingCount}</strong>
-          <p>inscription(s) en attente</p>
+
+      {notice && <p className="auth-notice">{notice}</p>}
+
+      <section className="workflow-stats">
+        <article className="visual-panel">
+          <span>Personnel</span>
+          <strong>{overview?.totals.personnel ?? 0}</strong>
         </article>
-      </div>
+        <article className="visual-panel">
+          <span>Disponibles</span>
+          <strong>{overview?.totals.available ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Contrats actifs</span>
+          <strong>{overview?.totals.contractsActive ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Missions</span>
+          <strong>{overview?.totals.missionsUpcoming ?? 0}</strong>
+        </article>
+      </section>
+
+      {!canManageHr && (
+        <section className="settings-card">
+          <p className="approval-empty">
+            Le module RH complet est reserve aux profils RH et Admin.
+          </p>
+        </section>
+      )}
+
+      {canManageHr && (
+        <section className="hr-board">
+          <aside className="settings-card hr-staff-list" aria-label="Liste du personnel">
+            <div className="settings-panel-heading">
+              <div>
+                <p className="eyebrow">Personnel</p>
+                <h2>Liste active.</h2>
+              </div>
+              <button type="button" className="secondary-button bordered" onClick={refreshHr}>
+                Actualiser
+              </button>
+            </div>
+            {staffRows.map((staff) => (
+              <button
+                type="button"
+                className={`hr-staff-card ${selectedStaff?.id === staff.id ? 'active' : ''}`}
+                key={staff.id}
+                onClick={() => setSelectedStaffId(staff.id)}
+              >
+                <span className="hr-avatar">
+                  {staff.photoUrl ? <img src={staff.photoUrl} alt="" /> : userDisplayName(staff).slice(0, 2)}
+                </span>
+                <strong>{userDisplayName(staff)}</strong>
+                <small>{staff.profile?.internalRole || staff.roles?.[0]?.label || 'Collaborateur'}</small>
+                <em>{staffAvailabilityLabel(staff.profile?.availability || 'AVAILABLE')}</em>
+              </button>
+            ))}
+            {staffRows.length === 0 && (
+              <p className="approval-empty">
+                {isLoading ? 'Chargement du personnel...' : 'Aucun personnel actif.'}
+              </p>
+            )}
+          </aside>
+
+          <article className="settings-card hr-detail">
+            {selectedStaff ? (
+              <>
+                <div className="settings-panel-heading">
+                  <div>
+                    <p className="eyebrow">Dossier RH</p>
+                    <h2>{userDisplayName(selectedStaff)}</h2>
+                    <p>
+                      {selectedStaff.email} - {selectedStaff.phone || 'Contact non renseigne'}
+                    </p>
+                  </div>
+                  <span className="role-badge">
+                    {selectedStaff.roles?.map((role) => role.label).join(', ') || 'Utilisateur'}
+                  </span>
+                </div>
+
+                <div className="settings-meta-grid">
+                  <article>
+                    <span>Adresse</span>
+                    <strong>{selectedStaff.address || 'Non renseignee'}</strong>
+                  </article>
+                  <article>
+                    <span>Disponibilite</span>
+                    <strong>{staffAvailabilityLabel(selectedStaff.profile?.availability || 'AVAILABLE')}</strong>
+                  </article>
+                  <article>
+                    <span>Contrats</span>
+                    <strong>{selectedStaff.contracts.length}</strong>
+                  </article>
+                  <article>
+                    <span>Missions historiques</span>
+                    <strong>{selectedStaff.missions.length + selectedStaff.eventAssignments.length}</strong>
+                  </article>
+                </div>
+
+                <section className="hr-section">
+                  <p className="eyebrow">Profil utilisateur RH</p>
+                  <form className="compact-event-form" onSubmit={submitProfile}>
+                    <input
+                      name="internalRole"
+                      type="text"
+                      defaultValue={selectedStaff.profile?.internalRole ?? ''}
+                      placeholder="Role interne"
+                    />
+                    <input
+                      name="department"
+                      type="text"
+                      defaultValue={selectedStaff.profile?.department ?? ''}
+                      placeholder="Departement"
+                    />
+                    <select name="availability" defaultValue={selectedStaff.profile?.availability ?? 'AVAILABLE'}>
+                      {staffAvailabilityOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      name="availabilityNotes"
+                      type="text"
+                      defaultValue={selectedStaff.profile?.availabilityNotes ?? ''}
+                      placeholder="Notes disponibilite"
+                    />
+                    <input
+                      name="emergencyContact"
+                      type="text"
+                      defaultValue={selectedStaff.profile?.emergencyContact ?? ''}
+                      placeholder="Contact urgence"
+                    />
+                    <input
+                      name="hireDate"
+                      type="date"
+                      defaultValue={selectedStaff.profile?.hireDate?.slice(0, 10) ?? ''}
+                    />
+                    <button type="submit" className="primary-button" disabled={isSaving}>
+                      Enregistrer
+                    </button>
+                  </form>
+                </section>
+
+                <section className="hr-section-grid">
+                  <article className="hr-section">
+                    <p className="eyebrow">Contrats</p>
+                    <form className="compact-event-form" onSubmit={submitContract}>
+                      <input name="title" type="text" placeholder="Contrat, prestation..." required />
+                      <select name="type" defaultValue="AUTRE">
+                        {staffContractTypes.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select name="status" defaultValue="ACTIVE">
+                        {staffContractStatuses.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input name="startsAt" type="date" />
+                      <input name="endsAt" type="date" />
+                      <input name="salaryFcfa" type="number" min="0" placeholder="Montant FCFA" />
+                      <input name="fileUrl" type="url" placeholder="Lien fichier" />
+                      <input name="notes" type="text" placeholder="Notes" />
+                      <button type="submit" className="primary-button" disabled={isSaving}>
+                        Ajouter contrat
+                      </button>
+                    </form>
+                    <ul className="compact-list">
+                      {selectedStaff.contracts.map((contract) => (
+                        <li key={contract.id}>
+                          <span>{contract.title}</span>
+                          <strong>
+                            {staffContractTypeLabel(contract.type)} - {staffContractStatusLabel(contract.status)}
+                          </strong>
+                        </li>
+                      ))}
+                      {selectedStaff.contracts.length === 0 && <li>Aucun contrat.</li>}
+                    </ul>
+                  </article>
+
+                  <article className="hr-section">
+                    <p className="eyebrow">Documents administratifs</p>
+                    <form className="compact-event-form" onSubmit={submitDocument}>
+                      <input name="label" type="text" placeholder="Document" required />
+                      <select name="type" defaultValue="OTHER">
+                        {staffDocumentTypes.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input name="url" type="url" placeholder="Lien" />
+                      <input name="file" type="file" />
+                      <button type="submit" className="primary-button" disabled={isSaving}>
+                        Ajouter document
+                      </button>
+                    </form>
+                    <div className="document-grid">
+                      {selectedStaff.documents.map((document) => (
+                        <a href={document.url} target="_blank" rel="noreferrer" key={document.id}>
+                          <FileText size={18} aria-hidden="true" />
+                          <span>{document.label}</span>
+                          <small>{staffDocumentTypeLabel(document.type)}</small>
+                        </a>
+                      ))}
+                      {selectedStaff.documents.length === 0 && <p>Aucun document.</p>}
+                    </div>
+                  </article>
+                </section>
+
+                <section className="hr-section">
+                  <p className="eyebrow">Affectation aux evenements et missions</p>
+                  <form className="compact-event-form" onSubmit={submitMission}>
+                    <input name="title" type="text" placeholder="Mission" required />
+                    <select name="eventId" defaultValue="">
+                      <option value="">Sans evenement lie</option>
+                      {events.map((event) => (
+                        <option key={event.id} value={event.id}>
+                          {event.title}
+                        </option>
+                      ))}
+                    </select>
+                    <input name="roleNote" type="text" placeholder="Role sur mission" />
+                    <select name="status" defaultValue="PLANNED">
+                      {staffMissionStatuses.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input name="startsAt" type="datetime-local" />
+                    <input name="endsAt" type="datetime-local" />
+                    <input name="notes" type="text" placeholder="Notes" />
+                    <button type="submit" className="primary-button" disabled={isSaving}>
+                      Affecter
+                    </button>
+                  </form>
+                  <div className="activity-list workflow-timeline">
+                    {selectedStaff.missions.map((mission) => (
+                      <article key={mission.id}>
+                        <UserCheck size={18} aria-hidden="true" />
+                        <div>
+                          <strong>{mission.title}</strong>
+                          <span>
+                            {staffMissionStatusLabel(mission.status)}
+                            {mission.event ? ` - ${mission.event.title}` : ''}
+                          </span>
+                          {mission.roleNote && <small>{mission.roleNote}</small>}
+                        </div>
+                      </article>
+                    ))}
+                    {selectedStaff.eventAssignments.map((assignment) => (
+                      <article key={assignment.id}>
+                        <CalendarDays size={18} aria-hidden="true" />
+                        <div>
+                          <strong>{assignment.event.title}</strong>
+                          <span>Affectation evenement</span>
+                          {assignment.roleNote && <small>{assignment.roleNote}</small>}
+                        </div>
+                      </article>
+                    ))}
+                    {selectedStaff.missions.length + selectedStaff.eventAssignments.length === 0 && (
+                      <p className="approval-empty">Aucune mission pour ce profil.</p>
+                    )}
+                  </div>
+                </section>
+              </>
+            ) : (
+              <p className="approval-empty">Selectionnez un membre du personnel.</p>
+            )}
+          </article>
+        </section>
+      )}
+
+      {canManageHr && pendingCount > 0 && (
+        <section className="settings-card">
+          <p className="approval-empty">
+            {pendingCount} demande(s) d'inscription attendent encore une validation Admin.
+          </p>
+        </section>
+      )}
     </section>
   )
 }
@@ -3545,36 +4205,585 @@ function BudgetPage() {
   )
 }
 
-function AlertsPage({ onTestSound, onToggleSound, soundEnabled }) {
+function WorkflowPage({ onWorkflowEvent, user }) {
+  const [workflows, setWorkflows] = useState([])
+  const [events, setEvents] = useState([])
+  const [users, setUsers] = useState([])
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('')
+  const [decisionNote, setDecisionNote] = useState('')
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const isAdmin = user.roleValues.includes('ADMIN')
+  const canCreate = isAdmin || user.roleValues.includes('COMMERCIAL')
+  const canBudget = isAdmin || user.roleValues.includes('COMPTABLE')
+  const canAssign = isAdmin || user.roleValues.includes('RH')
+  const selectedWorkflow =
+    workflows.find((workflow) => workflow.id === selectedWorkflowId) ?? workflows[0]
+
+  const refreshWorkflows = useCallback(async () => {
+    setIsLoading(true)
+    setNotice('')
+
+    try {
+      const [nextWorkflows, nextEvents, nextUsers] = await Promise.all([
+        api.getWorkflows(),
+        api.getEvents().catch(() => []),
+        api.getUsers().catch(() => []),
+      ])
+
+      setWorkflows(nextWorkflows)
+      setEvents(nextEvents)
+      setUsers(nextUsers)
+      setSelectedWorkflowId((current) => current || nextWorkflows[0]?.id || '')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    Promise.all([
+      api.getWorkflows(),
+      api.getEvents().catch(() => []),
+      api.getUsers().catch(() => []),
+    ])
+      .then(([nextWorkflows, nextEvents, nextUsers]) => {
+        if (!isMounted) {
+          return
+        }
+
+        setWorkflows(nextWorkflows)
+        setEvents(nextEvents)
+        setUsers(nextUsers)
+        setSelectedWorkflowId(nextWorkflows[0]?.id || '')
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const syncWorkflow = (updatedWorkflow) => {
+    setWorkflows((current) => {
+      const exists = current.some((workflow) => workflow.id === updatedWorkflow.id)
+
+      if (!exists) {
+        return [updatedWorkflow, ...current]
+      }
+
+      return current.map((workflow) => (workflow.id === updatedWorkflow.id ? updatedWorkflow : workflow))
+    })
+    setSelectedWorkflowId(updatedWorkflow.id)
+  }
+
+  const submitWorkflow = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const workflow = await api.createWorkflow({
+        title: getFormValue(formData, 'title'),
+        description: getFormValue(formData, 'description'),
+        eventId: getFormValue(formData, 'eventId'),
+      })
+      syncWorkflow(workflow)
+      event.currentTarget.reset()
+      setNotice('Demande creee et envoyee au Comptable.')
+      onWorkflowEvent('Workflow cree')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitBudget = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    if (!selectedWorkflow) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const workflow = await api.addWorkflowBudget(selectedWorkflow.id, {
+        budgetAmountFcfa: Number(getFormValue(formData, 'budgetAmountFcfa') || 0),
+        budgetNotes: getFormValue(formData, 'budgetNotes'),
+      })
+      syncWorkflow(workflow)
+      event.currentTarget.reset()
+      setNotice('Budget ajoute et transmis a la RH.')
+      onWorkflowEvent('Budget workflow ajoute')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitAssignees = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    const userIds = formData.getAll('userIds').map(String).filter(Boolean)
+
+    if (!selectedWorkflow || userIds.length === 0) {
+      setNotice('Selectionnez au moins une personne.')
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const workflow = await api.assignWorkflowPeople(selectedWorkflow.id, {
+        assignees: userIds.map((userId) => ({
+          userId,
+          roleNote: getFormValue(formData, 'roleNote'),
+        })),
+      })
+      syncWorkflow(workflow)
+      event.currentTarget.reset()
+      setNotice('Responsables affectes et demande envoyee a l Admin.')
+      onWorkflowEvent('Affectation RH effectuee')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const decideWorkflow = async (action) => {
+    if (!selectedWorkflow) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const workflow =
+        action === 'approve'
+          ? await api.approveWorkflow(selectedWorkflow.id, { note: decisionNote })
+          : await api.rejectWorkflow(selectedWorkflow.id, { note: decisionNote })
+      syncWorkflow(workflow)
+      setDecisionNote('')
+      setNotice(action === 'approve' ? 'Demande validee.' : 'Demande refusee.')
+      onWorkflowEvent(action === 'approve' ? 'Workflow valide' : 'Workflow refuse')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <section className="module-page">
       <ModuleHeader
-        description="Centralisez les alertes importantes et testez la notification sonore du dashboard Admin."
+        description="Suivez la chaine Commercial, Comptable, RH et Admin avec un journal complet des actions."
+        icon={Layers}
+        label="Workflow"
+        title="Validation interne."
+      />
+
+      {notice && <p className="auth-notice">{notice}</p>}
+
+      <section className="workflow-stats">
+        <article className="visual-panel">
+          <span>Demandes</span>
+          <strong>{workflows.length}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Budget attendu</span>
+          <strong>{workflows.filter((workflow) => workflow.status === 'PENDING_BUDGET').length}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Validation Admin</span>
+          <strong>{workflows.filter((workflow) => workflow.status === 'PENDING_ADMIN').length}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Validees</span>
+          <strong>{workflows.filter((workflow) => workflow.status === 'APPROVED').length}</strong>
+        </article>
+      </section>
+
+      {canCreate && (
+        <section className="settings-card">
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Commercial</p>
+              <h2>Creer une demande.</h2>
+            </div>
+          </div>
+          <form className="compact-event-form" onSubmit={submitWorkflow}>
+            <input name="title" type="text" placeholder="Demande client, prestation, production..." required />
+            <select name="eventId" defaultValue="">
+              <option value="">Sans evenement lie</option>
+              {events.map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.title}
+                </option>
+              ))}
+            </select>
+            <input name="description" type="text" placeholder="Description courte" />
+            <button type="submit" className="primary-button" disabled={isSaving}>
+              Creer
+            </button>
+          </form>
+        </section>
+      )}
+
+      <section className="workflow-board">
+        <aside className="workflow-list settings-card" aria-label="Liste des workflows">
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Demandes</p>
+              <h2>File de validation.</h2>
+            </div>
+            <button type="button" className="secondary-button bordered" onClick={refreshWorkflows}>
+              Actualiser
+            </button>
+          </div>
+          {workflows.map((workflow) => (
+            <button
+              type="button"
+              className={`workflow-card ${selectedWorkflow?.id === workflow.id ? 'active' : ''}`}
+              key={workflow.id}
+              onClick={() => setSelectedWorkflowId(workflow.id)}
+            >
+              <span>{workflowStatusLabel(workflow.status)}</span>
+              <strong>{workflow.title}</strong>
+              <small>{workflow.event?.title ?? 'Demande autonome'}</small>
+            </button>
+          ))}
+          {workflows.length === 0 && (
+            <p className="approval-empty">
+              {isLoading ? 'Chargement des workflows...' : 'Aucune demande de validation.'}
+            </p>
+          )}
+        </aside>
+
+        <article className="settings-card workflow-detail">
+          {selectedWorkflow ? (
+            <>
+              <div className="settings-panel-heading">
+                <div>
+                  <p className="eyebrow">{workflowStatusLabel(selectedWorkflow.status)}</p>
+                  <h2>{selectedWorkflow.title}</h2>
+                  <p>{selectedWorkflow.description || 'Aucune description.'}</p>
+                </div>
+                <span className="role-badge">{workflowStatusLabel(selectedWorkflow.status)}</span>
+              </div>
+
+              <div className="settings-meta-grid">
+                <article>
+                  <span>Demandeur</span>
+                  <strong>{userDisplayName(selectedWorkflow.requester)}</strong>
+                </article>
+                <article>
+                  <span>Evenement</span>
+                  <strong>{selectedWorkflow.event?.title ?? 'Non lie'}</strong>
+                </article>
+                <article>
+                  <span>Budget</span>
+                  <strong>{formatFcfa(selectedWorkflow.budgetAmountFcfa ?? 0)}</strong>
+                </article>
+                <article>
+                  <span>Responsables</span>
+                  <strong>{selectedWorkflow.assignees.length}</strong>
+                </article>
+              </div>
+
+              <div className="workflow-actions-grid">
+                {canBudget && selectedWorkflow.status === 'PENDING_BUDGET' && (
+                  <form className="compact-event-form" onSubmit={submitBudget}>
+                    <input
+                      name="budgetAmountFcfa"
+                      type="number"
+                      min="0"
+                      placeholder="Budget en FCFA"
+                      required
+                    />
+                    <input name="budgetNotes" type="text" placeholder="Notes budget" />
+                    <button type="submit" className="primary-button" disabled={isSaving}>
+                      Ajouter budget
+                    </button>
+                  </form>
+                )}
+
+                {canAssign && selectedWorkflow.status === 'PENDING_RH' && (
+                  <form className="compact-event-form" onSubmit={submitAssignees}>
+                    <select name="userIds" multiple required>
+                      {users.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {userDisplayName(item)}
+                        </option>
+                      ))}
+                    </select>
+                    <input name="roleNote" type="text" placeholder="Mission ou responsabilite" />
+                    <button type="submit" className="primary-button" disabled={isSaving}>
+                      Affecter
+                    </button>
+                  </form>
+                )}
+
+                {isAdmin && selectedWorkflow.status === 'PENDING_ADMIN' && (
+                  <div className="workflow-decision-box">
+                    <input
+                      type="text"
+                      value={decisionNote}
+                      onChange={(event) => setDecisionNote(event.target.value)}
+                      placeholder="Note ou motif de decision"
+                    />
+                    <div className="approval-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={isSaving}
+                      onClick={() => decideWorkflow('approve')}
+                    >
+                      <CheckCircle2 size={16} />
+                      Valider
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      disabled={isSaving}
+                      onClick={() => decideWorkflow('reject')}
+                    >
+                      <XCircle size={16} />
+                      Refuser
+                    </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <section className="workflow-section">
+                <p className="eyebrow">Responsables affectes</p>
+                <ul className="compact-list">
+                  {selectedWorkflow.assignees.map((assignee) => (
+                    <li key={assignee.id}>
+                      <span>{userDisplayName(assignee.user)}</span>
+                      <strong>{assignee.roleNote || 'Responsable'}</strong>
+                    </li>
+                  ))}
+                  {selectedWorkflow.assignees.length === 0 && <li>Aucune personne affectee.</li>}
+                </ul>
+              </section>
+
+              <section className="workflow-section">
+                <p className="eyebrow">Journal du workflow</p>
+                <div className="activity-list workflow-timeline">
+                  {selectedWorkflow.actions.map((action) => (
+                    <article key={action.id}>
+                      <History size={18} aria-hidden="true" />
+                      <div>
+                        <strong>{workflowActionLabel(action.action)}</strong>
+                        <span>
+                          {userDisplayName(action.actor)} - {formatDateTime(new Date(action.createdAt))}
+                        </span>
+                        {action.note && <small>{action.note}</small>}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </>
+          ) : (
+            <p className="approval-empty">Selectionnez une demande pour afficher son suivi.</p>
+          )}
+        </article>
+      </section>
+    </section>
+  )
+}
+
+function AlertsPage({ notificationCount, onNotificationsChanged, onTestSound, onToggleSound, soundEnabled }) {
+  const [notifications, setNotifications] = useState([])
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const refreshNotifications = useCallback(async () => {
+    setIsLoading(true)
+    setNotice('')
+
+    try {
+      const [nextNotifications, unread] = await Promise.all([
+        api.getNotifications(),
+        api.getNotificationCount(),
+      ])
+      setNotifications(nextNotifications)
+      onNotificationsChanged(unread.count ?? 0)
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [onNotificationsChanged])
+
+  useEffect(() => {
+    let isMounted = true
+
+    Promise.all([api.getNotifications(), api.getNotificationCount()])
+      .then(([nextNotifications, unread]) => {
+        if (!isMounted) {
+          return
+        }
+
+        setNotifications(nextNotifications)
+        onNotificationsChanged(unread.count ?? 0)
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [onNotificationsChanged])
+
+  const markAsRead = async (notification) => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const updated = await api.markNotificationRead(notification.id)
+      setNotifications((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item)),
+      )
+      onNotificationsChanged(Math.max(notificationCount - 1, 0))
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const sendReminders = async () => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const result = await api.sendEventReminders()
+      await refreshNotifications()
+      setNotice(`${result.createdCount} rappel(s) evenement cree(s).`)
+      onTestSound()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className="module-page">
+      <ModuleHeader
+        description="Centralisez les alertes in-app, email, WhatsApp, SMS et les rappels automatiques avant evenement."
         icon={Bell}
         label="Alertes"
         title="Alertes."
       />
+      {notice && <p className="auth-notice">{notice}</p>}
       <div className="alert-toolbar">
         <button type="button" className="secondary-button bordered" onClick={onToggleSound}>
           {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
           {soundEnabled ? 'Desactiver le son' : 'Activer le son'}
+        </button>
+        <button type="button" className="secondary-button bordered" onClick={refreshNotifications}>
+          <Bell size={17} />
+          Actualiser
+        </button>
+        <button type="button" className="secondary-button bordered" disabled={isSaving} onClick={sendReminders}>
+          <CalendarDays size={17} />
+          Rappels evenements
         </button>
         <button type="button" className="primary-button" onClick={onTestSound}>
           <Bell size={17} />
           Tester l'alerte
         </button>
       </div>
+      <section className="workflow-stats">
+        <article className="visual-panel">
+          <span>Non lues</span>
+          <strong>{notificationCount}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Total</span>
+          <strong>{notifications.length}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Budget</span>
+          <strong>
+            {notifications.filter((item) => item.type === 'BUDGET_PENDING' || item.type === 'BUDGET_OVER_LIMIT').length}
+          </strong>
+        </article>
+        <article className="visual-panel">
+          <span>Workflow</span>
+          <strong>{notifications.filter((item) => item.type === 'WORKFLOW_UPDATED').length}</strong>
+        </article>
+      </section>
       <div className="alert-list">
-        {alertRows.map((alert) => (
-          <article className="alert-card" key={alert.title}>
+        {notifications.map((notification) => (
+          <article
+            className={`alert-card notification-card ${notification.readAt ? 'read' : 'unread'}`}
+            key={notification.id}
+          >
             <AlertTriangle size={22} aria-hidden="true" />
             <div>
-              <strong>{alert.title}</strong>
-              <span>{alert.time}</span>
+              <strong>{notification.title}</strong>
+              <span>{notification.message}</span>
+              <small>
+                {notificationTypeLabel(notification.type)} - {formatDateTime(new Date(notification.createdAt))}
+              </small>
             </div>
-            <em>{alert.level}</em>
+            <div className="table-actions">
+              <em>{notification.readAt ? 'Lue' : 'Non lue'}</em>
+              {!notification.readAt && (
+                <button
+                  type="button"
+                  className="secondary-button bordered"
+                  disabled={isSaving}
+                  onClick={() => markAsRead(notification)}
+                >
+                  Marquer lue
+                </button>
+              )}
+            </div>
           </article>
         ))}
+        {notifications.length === 0 && (
+          <p className="approval-empty">
+            {isLoading ? 'Chargement des alertes...' : 'Aucune notification pour le moment.'}
+          </p>
+        )}
       </div>
     </section>
   )

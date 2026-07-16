@@ -6,6 +6,11 @@ export class SmsService {
   constructor(private readonly config: ConfigService) {}
 
   async sendOtp(phone: string, code: string) {
+    // L'OTP reutilise l'envoi generique afin que les notifications SMS restent centralisees.
+    return this.sendMessage(phone, `Votre code M Group est ${code}. Il expire dans quelques minutes.`);
+  }
+
+  async sendMessage(phone: string, message: string) {
     // En production, ce service utilise Twilio si les variables d'environnement sont presentes.
     if (!this.isTwilioConfigured()) {
       return { delivered: false, reason: 'Twilio SMS is not configured.' };
@@ -17,7 +22,7 @@ export class SmsService {
     const body = new URLSearchParams({
       To: phone,
       From: from,
-      Body: `Votre code M Group est ${code}. Il expire dans quelques minutes.`,
+      Body: message,
     });
 
     const response = await fetch(

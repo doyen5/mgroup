@@ -81,6 +81,11 @@ mgroup-app/
         |-- auth/
         |-- setup/
         |-- users/
+        |-- events/
+        |-- finance/
+        |-- hr/
+        |-- workflows/
+        |-- notifications/
         |-- prisma/
         `-- common/
 ```
@@ -157,6 +162,7 @@ SMTP_FROM="M Group <no-reply@mgroup.ci>"
 TWILIO_ACCOUNT_SID=""
 TWILIO_AUTH_TOKEN=""
 TWILIO_FROM_NUMBER=""
+EVENT_REMINDER_HOURS=24
 ```
 
 Frontend : `client/.env`
@@ -309,14 +315,75 @@ Le dashboard Admin contient maintenant :
 - le libelle `Le Boss Molare` dans l'en-tete du dashboard ;
 - une zone profil avec nom complet, role, photo/avatar et derniere connexion ;
 - une horloge temps reel ;
-- des cartes statistiques colorees ;
-- des panneaux graphiques visuels avec budget et montants en FCFA ;
-- des pages internes accessibles depuis le menu : Inscriptions, Evenements, Finance, Equipe, Budget, Alertes et Parametres ;
+- une vue generale interactive avec donnees reelles : inscriptions, evenements, budgets, alertes, workflows, finance et RH ;
+- des cartes statistiques colorees avec icones `lucide-react` ;
+- des panneaux graphiques visuels avec activite evenementielle, budget et montants en FCFA ;
+- des actions rapides vers les modules prioritaires ;
+- des pages internes accessibles depuis le menu : Vue generale, Inscriptions, Workflows, Evenements, Equipe/RH, Finances, Budget, Alertes et Parametres ;
 - des alertes sonores cote navigateur pour prevenir l'Admin lors des changements importants ;
 - la validation des inscriptions en attente depuis PostgreSQL.
 - une section `Parametres` complete pour le profil, la securite, l'entreprise, les utilisateurs, les preferences, les notifications, les modules et le journal d'activite.
 
 La page `Alertes` permet d'activer/desactiver le son et de tester une notification. Le son est genere dans le navigateur avec Web Audio API, sans fichier audio externe.
+
+## Dashboards par profil
+
+La navigation est maintenant filtree par role. Un utilisateur ne voit que les modules utiles a son metier.
+
+Admin :
+
+```txt
+Vue generale
+Inscriptions
+Workflows
+Evenements
+Equipe / RH
+Finances
+Budget
+Alertes
+Parametres
+```
+
+RH :
+
+```txt
+Vue generale
+Equipe / RH
+Workflows
+Evenements
+Alertes
+Parametres
+```
+
+Comptable :
+
+```txt
+Vue generale
+Finances
+Budget
+Workflows
+Evenements
+Alertes
+Parametres
+```
+
+Commercial :
+
+```txt
+Vue generale
+Workflows
+Evenements
+Alertes
+Parametres
+```
+
+La vue generale n'est plus statique. Elle charge les donnees API selon le role :
+
+- Admin : inscriptions en attente, evenements, budgets, paiements, workflows a valider, personnel RH et alertes ;
+- RH : personnel actif, disponibilites, workflows RH, evenements, contrats, missions et alertes ;
+- autres profils : vue reduite selon les modules autorises.
+
+Les anciens pictogrammes texte du menu ont ete remplaces par des icones `lucide-react`.
 
 Dans `Parametres > Profil utilisateur`, l'utilisateur peut modifier :
 
@@ -488,6 +555,113 @@ Tables ajoutees :
 - `EventPayment`
 - `EventFinanceDocument`
 
+## Workflow de validation
+
+La priorite workflow ajoute une chaine de validation adaptee a M Group :
+
+- un `Commercial` cree une demande ;
+- le `Comptable` ajoute le budget previsionnel ;
+- la `RH` affecte les responsables ou collaborateurs ;
+- l'`Admin` valide ou refuse la demande ;
+- chaque etape est historisee dans le journal du workflow et dans le journal d'activite global.
+
+Statuts workflow :
+
+```txt
+DRAFT
+PENDING_BUDGET
+PENDING_RH
+PENDING_ADMIN
+APPROVED
+REJECTED
+CANCELLED
+```
+
+Tables ajoutees :
+
+- `WorkflowRequest`
+- `WorkflowAssignee`
+- `WorkflowAction`
+
+Routes principales :
+
+```txt
+GET   /api/workflows
+GET   /api/workflows/:id
+POST  /api/workflows
+PATCH /api/workflows/:id/budget
+PATCH /api/workflows/:id/assignees
+PATCH /api/workflows/:id/approve
+PATCH /api/workflows/:id/reject
+```
+
+## Notifications serieuses
+
+Le module notifications centralise les alertes importantes :
+
+- notification dans l'application ;
+- email si SMTP est configure ;
+- SMS si Twilio est configure ;
+- lien WhatsApp pret a ouvrir avec le message ;
+- alerte sonore cote dashboard ;
+- rappels avant evenement ;
+- notification quand un budget attend validation ;
+- notification quand un budget depasse la limite ;
+- notification quand un workflow change d'etape.
+
+Table ajoutee :
+
+- `Notification`
+
+Routes principales :
+
+```txt
+GET   /api/notifications
+GET   /api/notifications/unread-count
+PATCH /api/notifications/:id/read
+POST  /api/notifications/event-reminders
+```
+
+Important : l'envoi WhatsApp automatique necessite un fournisseur officiel en production.
+Dans cette version, l'application prepare le lien WhatsApp et garde la notification en base.
+
+## Module equipe / RH
+
+La priorite RH ajoute un dashboard dedie aux profils `RH` et `ADMIN`.
+
+Fonctionnalites disponibles :
+
+- liste du personnel actif ;
+- roles internes et departements ;
+- disponibilite : disponible, occupe, indisponible, en conge ;
+- contrats avec type, statut, dates, montant FCFA et fichier ;
+- documents administratifs : piece d'identite, contrat, CV, attestation, administratif ou autre ;
+- affectation aux evenements via missions RH ;
+- historique des missions et affectations evenementielles existantes.
+
+Le profil `RH` ouvre directement la page `Equipe et RH` apres connexion. Cette page utilise
+`GET /api/hr/overview` et n'a plus besoin des donnees statiques.
+
+Correction locale effectuee pour le compte RH :
+
+```txt
+Nom : Traore
+Prenom : Mariam
+Email : traoremariam@mgroup.ci
+Role : RH
+Statut : ACTIVE
+```
+
+Le mot de passe fourni a ete stocke sous forme hashee en base. Les anciennes sessions du compte
+ont ete revoquees pour obliger une reconnexion propre.
+
+Tables ajoutees :
+
+- `StaffProfile`
+- `StaffContract`
+- `StaffDocument`
+- `StaffMission`
+
 ## Remember me et mot de passe oublie
 
 `Remember me` fonctionne ainsi :
@@ -595,6 +769,38 @@ POST   /api/finance/events/:eventId/documents
 DELETE /api/finance/documents/:documentId
 ```
 
+Workflows :
+
+```txt
+GET   /api/workflows
+GET   /api/workflows/:id
+POST  /api/workflows
+PATCH /api/workflows/:id/budget
+PATCH /api/workflows/:id/assignees
+PATCH /api/workflows/:id/approve
+PATCH /api/workflows/:id/reject
+```
+
+Notifications :
+
+```txt
+GET   /api/notifications
+GET   /api/notifications/unread-count
+PATCH /api/notifications/:id/read
+POST  /api/notifications/event-reminders
+```
+
+RH :
+
+```txt
+GET   /api/hr/overview
+GET   /api/hr/staff
+PATCH /api/hr/staff/:userId/profile
+POST  /api/hr/staff/:userId/contracts
+POST  /api/hr/staff/:userId/documents
+POST  /api/hr/staff/:userId/missions
+```
+
 Users :
 
 ```txt
@@ -633,6 +839,14 @@ Tables principales :
 - `EventExpense`
 - `EventPayment`
 - `EventFinanceDocument`
+- `WorkflowRequest`
+- `WorkflowAssignee`
+- `WorkflowAction`
+- `Notification`
+- `StaffProfile`
+- `StaffContract`
+- `StaffDocument`
+- `StaffMission`
 - `LoginAuditLog`
 
 Actions d'audit principales :
@@ -660,6 +874,17 @@ ROLE_CHANGED
 PROFILE_UPDATED
 COMPANY_UPDATED
 SETUP_COMPLETED
+WORKFLOW_CREATED
+WORKFLOW_BUDGET_ADDED
+WORKFLOW_PEOPLE_ASSIGNED
+WORKFLOW_APPROVED
+WORKFLOW_REJECTED
+NOTIFICATION_SENT
+NOTIFICATION_READ
+STAFF_PROFILE_UPDATED
+STAFF_CONTRACT_CREATED
+STAFF_DOCUMENT_CREATED
+STAFF_MISSION_CREATED
 ```
 
 Statuts utilisateur :
@@ -707,6 +932,10 @@ Deja en place :
 - audit login/register/validation/changement de role ;
 - audit des modifications du profil connecte ;
 - audit des modifications entreprise ;
+- audit des actions workflow et notifications ;
+- audit des actions RH : profil, contrat, document et mission ;
+- notifications in-app persistantes avec lecture/non lecture ;
+- alertes budget et workflow vers les profils concernes ;
 - changement de mot de passe obligatoire apres creation admin ou validation utilisateur.
 
 A ajouter avant production :
@@ -804,6 +1033,10 @@ GET http://127.0.0.1:4000/api/events
 POST http://127.0.0.1:4000/api/events
 GET http://127.0.0.1:4000/api/finance/summary
 GET http://127.0.0.1:4000/api/finance/events/:eventId
+GET http://127.0.0.1:4000/api/workflows
+POST http://127.0.0.1:4000/api/workflows
+GET http://127.0.0.1:4000/api/notifications
+GET http://127.0.0.1:4000/api/notifications/unread-count
 GET http://127.0.0.1:4000/api/setup/company
 PATCH http://127.0.0.1:4000/api/setup/company
 GET http://127.0.0.1:5173/
@@ -811,9 +1044,10 @@ GET http://127.0.0.1:5173/
 
 Les routes `/api/auth/sessions`, `/api/auth/login-history`, `/api/auth/2fa/setup`,
 `/api/auth/2fa/enable`, `/api/auth/2fa/disable`, `/api/events`, `/api/finance/*`,
-`/api/setup/company` et `PATCH /api/setup/company` demandent une session connectee valide.
-Les routes entreprise, la configuration 2FA et la validation/rejet de budgets sont reservees au
-role `ADMIN`.
+`/api/workflows`, `/api/notifications`, `/api/setup/company` et `PATCH /api/setup/company`
+demandent une session connectee valide. Les routes entreprise, la configuration 2FA, la
+validation/rejet de budgets, la decision finale des workflows et les rappels evenement sont
+reserves au role `ADMIN`.
 
 Etat actuel de la base de test au moment de la derniere verification :
 

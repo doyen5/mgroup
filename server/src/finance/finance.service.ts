@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { BudgetStatus, PaymentStatus } from '@prisma/client';
+import { BudgetStatus, NotificationType, PaymentStatus } from '@prisma/client';
 import { AuthenticatedUser } from '../common/types/authenticated-user';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateBudgetDto,
@@ -34,7 +35,10 @@ const financeInclude = {
 
 @Injectable()
 export class FinanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async summary() {
     const events = await this.prisma.event.findMany({
@@ -70,17 +74,31 @@ export class FinanceService {
 
   async createBudget(eventId: string, dto: CreateBudgetDto) {
     await this.ensureEventExists(eventId);
-    await this.prisma.eventBudget.create({
+    const status = dto.status ?? BudgetStatus.PENDING_APPROVAL;
+    const budget = await this.prisma.eventBudget.create({
       data: {
         eventId,
         label: dto.label.trim(),
         plannedAmountFcfa: dto.plannedAmountFcfa,
         notes: this.clean(dto.notes),
-        status: dto.status ?? BudgetStatus.PENDING_APPROVAL,
+        status,
       },
     });
 
-    return this.eventFinance(eventId);
+    const eventFinance = await this.eventFinance(eventId);
+
+    if (status === BudgetStatus.PENDING_APPROVAL) {
+      await this.notifications.notifyAdmins({
+        type: NotificationType.BUDGET_PENDING,
+        title: 'Budget en attente de validation',
+        message: `${budget.label} attend une validation Admin pour ${eventFinance.title}.`,
+        channels: ['IN_APP', 'EMAIL', 'SMS', 'WHATSAPP', 'SOUND'],
+        actionUrl: '#budget',
+        metadata: { eventId, budgetId: budget.id, amountFcfa: budget.plannedAmountFcfa },
+      });
+    }
+
+    return eventFinance;
   }
 
   async updateBudget(budgetId: string, dto: UpdateBudgetDto) {
@@ -146,7 +164,24 @@ export class FinanceService {
       },
     });
 
-    return this.eventFinance(eventId);
+    const eventFinance = await this.eventFinance(eventId);
+
+    if (eventFinance.finance.isOverBudget) {
+      await this.notifications.notifyAdmins({
+        type: NotificationType.BUDGET_OVER_LIMIT,
+        title: 'Depassement budgetaire detecte',
+        message: `${eventFinance.title} depasse la limite budgetaire : ${eventFinance.finance.actualExpensesFcfa} FCFA depenses.`,
+        channels: ['IN_APP', 'EMAIL', 'SMS', 'WHATSAPP', 'SOUND'],
+        actionUrl: '#finance',
+        metadata: {
+          eventId,
+          actualExpensesFcfa: eventFinance.finance.actualExpensesFcfa,
+          limitFcfa: eventFinance.finance.limitFcfa,
+        },
+      });
+    }
+
+    return eventFinance;
   }
 
   async createPayment(eventId: string, dto: CreatePaymentDto) {

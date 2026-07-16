@@ -48,6 +48,17 @@ enum AuditAction {
   PROFILE_UPDATED
   COMPANY_UPDATED
   SETUP_COMPLETED
+  WORKFLOW_CREATED
+  WORKFLOW_BUDGET_ADDED
+  WORKFLOW_PEOPLE_ASSIGNED
+  WORKFLOW_APPROVED
+  WORKFLOW_REJECTED
+  NOTIFICATION_SENT
+  NOTIFICATION_READ
+  STAFF_PROFILE_UPDATED
+  STAFF_CONTRACT_CREATED
+  STAFF_DOCUMENT_CREATED
+  STAFF_MISSION_CREATED
 }
 
 enum AuthChallengeType {
@@ -91,6 +102,81 @@ enum FinanceDocumentType {
   INVOICE
   RECEIPT
   OTHER
+}
+
+enum WorkflowStatus {
+  DRAFT
+  PENDING_BUDGET
+  PENDING_RH
+  PENDING_ADMIN
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum WorkflowActionType {
+  CREATED
+  BUDGET_ADDED
+  PEOPLE_ASSIGNED
+  SUBMITTED_TO_ADMIN
+  APPROVED
+  REJECTED
+  COMMENTED
+}
+
+enum NotificationType {
+  USER_REGISTERED
+  BUDGET_PENDING
+  BUDGET_OVER_LIMIT
+  EVENT_REMINDER
+  WORKFLOW_UPDATED
+  EVENT_UPCOMING
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+enum StaffAvailability {
+  AVAILABLE
+  BUSY
+  UNAVAILABLE
+  ON_LEAVE
+}
+
+enum StaffContractType {
+  CDI
+  CDD
+  FREELANCE
+  STAGE
+  PRESTATAIRE
+  AUTRE
+}
+
+enum StaffContractStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum StaffDocumentType {
+  ID_CARD
+  CONTRACT
+  CV
+  CERTIFICATE
+  ADMINISTRATIVE
+  OTHER
+}
+
+enum StaffMissionStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }
 
 model Company {
@@ -145,6 +231,14 @@ model User {
   eventAssignments        EventAssignment[]
   productionSteps         EventProductionStep[]    @relation("EventProductionOwner")
   validatedBudgets        EventBudget[]            @relation("EventBudgetValidator")
+  workflowRequests        WorkflowRequest[]        @relation("WorkflowRequester")
+  workflowActions         WorkflowAction[]         @relation("WorkflowActor")
+  workflowAssignees       WorkflowAssignee[]
+  notifications           Notification[]
+  staffProfile            StaffProfile?
+  staffContracts          StaffContract[]
+  staffDocuments          StaffDocument[]
+  staffMissions           StaffMission[]
 }
 
 model Role {
@@ -270,6 +364,8 @@ model Event {
   expenses    EventExpense[]
   payments    EventPayment[]
   documents   EventFinanceDocument[]
+  workflows   WorkflowRequest[]
+  missions    StaffMission[]
 }
 
 model EventAssignment {
@@ -388,4 +484,132 @@ model EventFinanceDocument {
   createdAt  DateTime            @default(now())
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowRequest {
+  id               String         @id @default(cuid())
+  eventId          String?
+  requesterId      String?
+  title            String
+  description      String?
+  status           WorkflowStatus @default(PENDING_BUDGET)
+  budgetAmountFcfa Int?
+  budgetNotes      String?
+  adminNote        String?
+  submittedAt      DateTime?
+  decidedAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  event     Event?             @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  requester User?              @relation("WorkflowRequester", fields: [requesterId], references: [id], onDelete: SetNull)
+  assignees WorkflowAssignee[]
+  actions   WorkflowAction[]
+}
+
+model WorkflowAssignee {
+  id        String   @id @default(cuid())
+  requestId String
+  userId    String
+  roleNote  String?
+  createdAt DateTime @default(now())
+
+  request WorkflowRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, userId])
+}
+
+model WorkflowAction {
+  id        String             @id @default(cuid())
+  requestId String
+  actorId   String?
+  action    WorkflowActionType
+  note      String?
+  metadata  Json?
+  createdAt DateTime           @default(now())
+
+  request WorkflowRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor   User?           @relation("WorkflowActor", fields: [actorId], references: [id], onDelete: SetNull)
+}
+
+model Notification {
+  id           String             @id @default(cuid())
+  userId       String?
+  type         NotificationType
+  status       NotificationStatus @default(PENDING)
+  title        String
+  message      String
+  channels     Json?
+  actionUrl    String?
+  scheduledFor DateTime?
+  sentAt       DateTime?
+  readAt       DateTime?
+  metadata     Json?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StaffProfile {
+  id                String            @id @default(cuid())
+  userId            String            @unique
+  internalRole      String?
+  department        String?
+  availability      StaffAvailability @default(AVAILABLE)
+  availabilityNotes String?
+  emergencyContact  String?
+  hireDate          DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StaffContract {
+  id         String              @id @default(cuid())
+  userId     String
+  type       StaffContractType   @default(AUTRE)
+  status     StaffContractStatus @default(ACTIVE)
+  title      String
+  startsAt   DateTime?
+  endsAt     DateTime?
+  salaryFcfa Int?
+  fileUrl    String?
+  notes      String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StaffDocument {
+  id        String            @id @default(cuid())
+  userId    String
+  type      StaffDocumentType @default(OTHER)
+  label     String
+  url       String
+  fileName  String?
+  mimeType  String?
+  createdAt DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model StaffMission {
+  id        String             @id @default(cuid())
+  userId    String
+  eventId   String?
+  title     String
+  roleNote  String?
+  status    StaffMissionStatus @default(PLANNED)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  notes     String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
 }

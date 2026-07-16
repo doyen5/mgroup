@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { FinanceController } from './finance.controller';
-import { FinanceService } from './finance.service';
+import { WorkflowsController } from './workflows.controller';
+import { WorkflowsService } from './workflows.service';
 
 @Module({
   imports: [JwtModule.register({}), NotificationsModule],
-  controllers: [FinanceController],
-  providers: [FinanceService],
+  controllers: [WorkflowsController],
+  providers: [WorkflowsService],
 })
-export class FinanceModule {}
+export class WorkflowsModule {}

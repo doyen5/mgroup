@@ -6,9 +6,12 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { SecurityModule } from './common/security/security.module';
 import { EventsModule } from './events/events.module';
 import { FinanceModule } from './finance/finance.module';
+import { HrModule } from './hr/hr.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { SetupModule } from './setup/setup.module';
 import { UsersModule } from './users/users.module';
+import { WorkflowsModule } from './workflows/workflows.module';
 
 @Module({
   imports: [
@@ -20,6 +23,9 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     EventsModule,
     FinanceModule,
+    HrModule,
+    NotificationsModule,
+    WorkflowsModule,
   ],
   providers: [
     {
