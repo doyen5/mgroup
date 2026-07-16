@@ -59,6 +59,14 @@ enum AuditAction {
   STAFF_CONTRACT_CREATED
   STAFF_DOCUMENT_CREATED
   STAFF_MISSION_CREATED
+  CLIENT_CREATED
+  SERVICE_REQUEST_CREATED
+  QUOTE_CREATED
+  QUOTE_STATUS_UPDATED
+  CLIENT_EXCHANGE_CREATED
+  DOCUMENT_CREATED
+  DOCUMENT_VALIDATED
+  REPORT_EXPORTED
 }
 
 enum AuthChallengeType {
@@ -131,6 +139,9 @@ enum NotificationType {
   EVENT_REMINDER
   WORKFLOW_UPDATED
   EVENT_UPCOMING
+  COMMERCIAL_UPDATED
+  DOCUMENT_PENDING
+  REPORT_READY
 }
 
 enum NotificationStatus {
@@ -179,6 +190,63 @@ enum StaffMissionStatus {
   CANCELLED
 }
 
+enum CommercialStatus {
+  NEW
+  IN_DISCUSSION
+  WON
+  LOST
+}
+
+enum ServiceRequestStatus {
+  NEW
+  IN_DISCUSSION
+  QUOTED
+  WON
+  LOST
+  CANCELLED
+}
+
+enum CommercialQuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum BusinessDocumentScope {
+  EVENT
+  CLIENT
+  USER
+  COMPANY
+}
+
+enum BusinessDocumentType {
+  QUOTE
+  INVOICE
+  RECEIPT
+  CONTRACT
+  TECHNICAL_SHEET
+  PHOTO
+  ADMINISTRATIVE
+  REPORT
+  OTHER
+}
+
+enum BusinessDocumentStatus {
+  DRAFT
+  PENDING_VALIDATION
+  APPROVED
+  REJECTED
+  SIGNED
+  ARCHIVED
+}
+
+enum ReportExportFormat {
+  PDF
+  EXCEL
+}
+
 model Company {
   id             String   @id @default(cuid())
   name           String
@@ -194,6 +262,8 @@ model Company {
 
   users  User[]
   events Event[]
+  clients CommercialClient[]
+  businessDocuments BusinessDocument[]
 }
 
 model User {
@@ -239,6 +309,14 @@ model User {
   staffContracts          StaffContract[]
   staffDocuments          StaffDocument[]
   staffMissions           StaffMission[]
+  ownedClients            CommercialClient[]       @relation("CommercialClientOwner")
+  serviceRequests         ServiceRequest[]         @relation("ServiceRequestOwner")
+  commercialQuotes        CommercialQuote[]        @relation("QuoteCreatedBy")
+  clientExchanges         ClientExchange[]         @relation("ClientExchangeAuthor")
+  uploadedDocuments       BusinessDocument[]       @relation("DocumentUploadedBy")
+  validatedDocuments      BusinessDocument[]       @relation("DocumentValidatedBy")
+  subjectDocuments        BusinessDocument[]       @relation("DocumentSubjectUser")
+  reportExports           ReportExport[]           @relation("ReportExportGeneratedBy")
 }
 
 model Role {
@@ -366,6 +444,9 @@ model Event {
   documents   EventFinanceDocument[]
   workflows   WorkflowRequest[]
   missions    StaffMission[]
+  serviceRequests ServiceRequest[]
+  commercialQuotes CommercialQuote[]
+  businessDocuments BusinessDocument[]
 }
 
 model EventAssignment {
@@ -612,4 +693,146 @@ model StaffMission {
 
   user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+}
+
+model CommercialClient {
+  id          String           @id @default(cuid())
+  companyId   String?
+  ownerId     String?
+  name        String
+  contactName String?
+  email       String?
+  phone       String?
+  address     String?
+  source      String?
+  status      CommercialStatus @default(NEW)
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  company         Company?            @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  owner           User?               @relation("CommercialClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  serviceRequests ServiceRequest[]
+  quotes          CommercialQuote[]
+  exchanges       ClientExchange[]
+  documents       BusinessDocument[]
+
+  @@index([status])
+  @@index([companyId])
+}
+
+model ServiceRequest {
+  id                 String               @id @default(cuid())
+  clientId           String
+  eventId            String?
+  ownerId            String?
+  title              String
+  description        String?
+  expectedBudgetFcfa Int?
+  status             ServiceRequestStatus @default(NEW)
+  requestedAt        DateTime             @default(now())
+  dueAt              DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  client CommercialClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  event  Event?           @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  owner  User?            @relation("ServiceRequestOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  quotes CommercialQuote[]
+
+  @@index([clientId])
+  @@index([status])
+}
+
+model CommercialQuote {
+  id          String                @id @default(cuid())
+  clientId    String
+  requestId   String?
+  eventId     String?
+  createdById String?
+  quoteNumber String                @unique
+  title       String
+  amountFcfa  Int
+  status      CommercialQuoteStatus @default(DRAFT)
+  validUntil  DateTime?
+  pdfUrl      String?
+  notes       String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  client    CommercialClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  request   ServiceRequest?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  event     Event?           @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  createdBy User?            @relation("QuoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([status])
+}
+
+model ClientExchange {
+  id          String   @id @default(cuid())
+  clientId    String
+  userId      String?
+  channel     String
+  subject     String?
+  notes       String
+  exchangedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  client CommercialClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User?            @relation("ClientExchangeAuthor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+}
+
+model BusinessDocument {
+  id            String                 @id @default(cuid())
+  companyId     String?
+  eventId       String?
+  clientId      String?
+  userId        String?
+  uploadedById  String?
+  validatedById String?
+  scope         BusinessDocumentScope
+  type          BusinessDocumentType   @default(OTHER)
+  status        BusinessDocumentStatus @default(DRAFT)
+  label         String
+  url           String
+  fileName      String?
+  mimeType      String?
+  sizeBytes     Int?
+  checksum      String?
+  templateName  String?
+  logoIncluded  Boolean                @default(true)
+  notes         String?
+  validatedAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  company     Company?          @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  event       Event?            @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  client      CommercialClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  subjectUser User?             @relation("DocumentSubjectUser", fields: [userId], references: [id], onDelete: SetNull)
+  uploadedBy  User?             @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  validatedBy User?             @relation("DocumentValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
+
+  @@index([scope])
+  @@index([status])
+  @@index([eventId])
+  @@index([clientId])
+  @@index([userId])
+}
+
+model ReportExport {
+  id            String             @id @default(cuid())
+  generatedById String?
+  title         String
+  format        ReportExportFormat
+  periodStart   DateTime?
+  periodEnd     DateTime?
+  fileUrl       String?
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+
+  generatedBy User? @relation("ReportExportGeneratedBy", fields: [generatedById], references: [id], onDelete: SetNull)
 }

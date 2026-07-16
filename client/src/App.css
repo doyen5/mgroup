@@ -1926,6 +1926,10 @@ button:disabled,
   background: conic-gradient(#159bd3 0 48%, #ff8a2a 48% 72%, #8e89ff 72% 100%);
 }
 
+.donut-chart.commercial {
+  background: conic-gradient(#159bd3 0 42%, #ff8a2a 42% 68%, #28b487 68% 84%, #e54d2e 84% 100%);
+}
+
 .overview-big-number {
   display: block;
   margin-top: 14px;
@@ -2099,6 +2103,129 @@ button:disabled,
 
 .module-card.highlight {
   background: #f7fbff;
+}
+
+.business-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.business-form {
+  display: grid;
+  gap: 16px;
+}
+
+.pipeline-stage-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pipeline-stage-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f7fbff, #ffffff);
+}
+
+.pipeline-stage-grid span,
+.business-list small,
+.document-list small,
+.report-bars span,
+.report-bars small {
+  color: #58708f;
+  font-weight: 800;
+}
+
+.pipeline-stage-grid strong {
+  color: #159bd3;
+  font-size: 1.7rem;
+}
+
+.business-list,
+.document-list {
+  display: grid;
+  gap: 10px;
+}
+
+.business-list button,
+.document-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+  color: inherit;
+  background: #f7fbff;
+  text-align: left;
+  transition:
+    transform 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.business-list button:hover,
+.business-list button.active,
+.document-list article:hover {
+  transform: translateY(-2px);
+  border-color: #9fd8f5;
+  box-shadow: 0 18px 40px rgba(16, 82, 129, 0.12);
+}
+
+.business-list strong,
+.document-list strong {
+  display: block;
+  margin: 4px 0;
+  color: #10233f;
+}
+
+.business-detail {
+  align-content: start;
+}
+
+.business-table > div {
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr) auto auto;
+}
+
+.report-filter-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) repeat(3, auto);
+  gap: 12px;
+  align-items: end;
+}
+
+.report-bars {
+  display: grid;
+  gap: 12px;
+}
+
+.report-bars article {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 150px 32px;
+  gap: 12px;
+  align-items: center;
+}
+
+.report-bars div {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef7ff;
+}
+
+.report-bars i {
+  width: var(--bar-width);
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #159bd3, #ff8a2a);
+  animation: barIn 0.65s ease both;
 }
 
 .finance-kpi-grid,
@@ -2942,6 +3069,7 @@ button:disabled,
   .module-grid,
   .finance-kpi-grid,
   .finance-workspace,
+  .business-dashboard-grid,
   .event-workspace,
   .event-detail-grid,
   .workflow-stats,
@@ -2955,6 +3083,13 @@ button:disabled,
   .settings-profile-row,
   .approval-row,
   .profile-welcome {
+    grid-template-columns: 1fr;
+  }
+
+  .report-filter-form,
+  .report-bars article,
+  .business-list button,
+  .document-list article {
     grid-template-columns: 1fr;
   }
 
@@ -3085,6 +3220,7 @@ button:disabled,
   .setup-steps,
   .setup-actions,
   .settings-tabs,
+  .pipeline-stage-grid,
   .register-inline-grid {
     grid-template-columns: 1fr;
   }

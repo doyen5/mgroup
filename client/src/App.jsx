@@ -166,33 +166,101 @@ const staffMissionStatuses = [
   { value: 'CANCELLED', label: 'Annulee' },
 ]
 
+const commercialStatusOptions = [
+  { value: 'NEW', label: 'Nouveau' },
+  { value: 'IN_DISCUSSION', label: 'En discussion' },
+  { value: 'WON', label: 'Gagne' },
+  { value: 'LOST', label: 'Perdu' },
+]
+
+const serviceRequestStatusOptions = [
+  { value: 'NEW', label: 'Nouvelle' },
+  { value: 'IN_DISCUSSION', label: 'En discussion' },
+  { value: 'QUOTED', label: 'Devis envoye' },
+  { value: 'WON', label: 'Gagnee' },
+  { value: 'LOST', label: 'Perdue' },
+  { value: 'CANCELLED', label: 'Annulee' },
+]
+
+const quoteStatusOptions = [
+  { value: 'DRAFT', label: 'Brouillon' },
+  { value: 'SENT', label: 'Envoye' },
+  { value: 'ACCEPTED', label: 'Accepte' },
+  { value: 'REJECTED', label: 'Rejete' },
+  { value: 'EXPIRED', label: 'Expire' },
+]
+
+const documentScopeOptions = [
+  { value: 'COMPANY', label: 'Entreprise' },
+  { value: 'EVENT', label: 'Evenement' },
+  { value: 'CLIENT', label: 'Client' },
+  { value: 'USER', label: 'Utilisateur' },
+]
+
+const businessDocumentTypes = [
+  { value: 'QUOTE', label: 'Devis' },
+  { value: 'INVOICE', label: 'Facture' },
+  { value: 'RECEIPT', label: 'Recu' },
+  { value: 'CONTRACT', label: 'Contrat' },
+  { value: 'TECHNICAL_SHEET', label: 'Fiche technique' },
+  { value: 'PHOTO', label: 'Photo' },
+  { value: 'ADMINISTRATIVE', label: 'Administratif' },
+  { value: 'REPORT', label: 'Rapport' },
+  { value: 'OTHER', label: 'Autre' },
+]
+
+const businessDocumentStatuses = [
+  { value: 'DRAFT', label: 'Brouillon' },
+  { value: 'PENDING_VALIDATION', label: 'A valider' },
+  { value: 'APPROVED', label: 'Valide' },
+  { value: 'REJECTED', label: 'Rejete' },
+  { value: 'SIGNED', label: 'Signe' },
+  { value: 'ARCHIVED', label: 'Archive' },
+]
+
 const dashboardPanelCatalog = {
   overview: { label: 'Vue generale', icon: Activity },
   validation: { label: 'Inscriptions', icon: ClipboardCheck },
   workflows: { label: 'Workflows', icon: Layers },
   events: { label: 'Evenements', icon: CalendarDays },
+  commercial: { label: 'Commercial', icon: UserPlus },
   finance: { label: 'Finances', icon: Wallet },
   team: { label: 'Equipe / RH', icon: Users },
   budget: { label: 'Budget', icon: Banknote },
+  documents: { label: 'Documents', icon: FileText },
+  reports: { label: 'Rapports', icon: Activity },
   alerts: { label: 'Alertes', icon: Bell },
   settings: { label: 'Parametres', icon: MonitorCog },
 }
 
 const getDashboardPanelIds = (roleValues) => {
   if (roleValues.includes('ADMIN')) {
-    return ['overview', 'validation', 'workflows', 'events', 'team', 'finance', 'budget', 'alerts', 'settings']
+    return [
+      'overview',
+      'validation',
+      'workflows',
+      'events',
+      'commercial',
+      'team',
+      'finance',
+      'budget',
+      'documents',
+      'reports',
+      'alerts',
+      'settings',
+    ]
   }
 
   if (roleValues.includes('RH')) {
-    return ['overview', 'team', 'workflows', 'events', 'alerts', 'settings']
+    return ['overview', 'team', 'workflows', 'events', 'documents', 'alerts', 'settings']
   }
 
   if (roleValues.includes('COMPTABLE')) {
-    return ['overview', 'finance', 'budget', 'workflows', 'events', 'alerts', 'settings']
+    return ['overview', 'finance', 'budget', 'documents', 'reports', 'workflows', 'events', 'alerts', 'settings']
   }
 
   if (roleValues.includes('COMMERCIAL')) {
-    return ['overview', 'workflows', 'events', 'alerts', 'settings']
+    return ['overview', 'commercial', 'workflows', 'events', 'documents', 'reports', 'alerts', 'settings']
   }
 
   return ['overview', 'events', 'alerts', 'settings']
@@ -253,6 +321,19 @@ const staffDocumentTypeLabel = (type) =>
 
 const staffMissionStatusLabel = (status) =>
   staffMissionStatuses.find((option) => option.value === status)?.label ?? status
+
+const commercialStatusLabel = (status) =>
+  commercialStatusOptions.find((option) => option.value === status)?.label ?? status
+
+const quoteStatusLabel = (status) => quoteStatusOptions.find((option) => option.value === status)?.label ?? status
+
+const documentScopeLabel = (scope) => documentScopeOptions.find((option) => option.value === scope)?.label ?? scope
+
+const businessDocumentTypeLabel = (type) =>
+  businessDocumentTypes.find((option) => option.value === type)?.label ?? type
+
+const businessDocumentStatusLabel = (status) =>
+  businessDocumentStatuses.find((option) => option.value === status)?.label ?? status
 
 const userDisplayName = (user) =>
   `${user?.lastName ?? ''} ${user?.firstName ?? ''}`.trim() || user?.email || 'Utilisateur'
@@ -549,7 +630,8 @@ function App() {
         }
 
         setAuthNotice(`API indisponible : ${error.message}`)
-        setCurrentView('gateway')
+        setAuthMode('login')
+        setCurrentView('auth')
       })
 
     return () => {
@@ -2183,12 +2265,18 @@ function DashboardView({
           <WorkflowPage onWorkflowEvent={playAdminSound} user={user} />
         ) : activePanelId === 'events' ? (
           <EventsPage />
+        ) : activePanelId === 'commercial' ? (
+          <CommercialPage user={user} />
         ) : activePanelId === 'finance' ? (
           <FinancePage />
         ) : activePanelId === 'team' ? (
           <TeamPage onHrEvent={playAdminSound} pendingCount={pendingUsers.length} user={user} />
         ) : activePanelId === 'budget' ? (
           <BudgetPage />
+        ) : activePanelId === 'documents' ? (
+          <DocumentsPage isAdmin={isAdmin} />
+        ) : activePanelId === 'reports' ? (
+          <ReportsPage />
         ) : activePanelId === 'alerts' ? (
           <AlertsPage
             notificationCount={notificationCount}
@@ -2245,14 +2333,25 @@ function RoleOverviewPage({
   user,
 }) {
   const [overview, setOverview] = useState({
+    commercial: null,
+    documents: null,
     events: [],
     finance: null,
     hr: null,
+    reports: null,
     workflows: [],
   })
   const [notice, setNotice] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const isRh = user.roleValues.includes('RH')
+  const isCommercial = user.roleValues.includes('COMMERCIAL')
+  const canCommercial = isAdmin || user.roleValues.includes('COMMERCIAL') || user.roleValues.includes('COMPTABLE')
+  const canDocuments =
+    isAdmin ||
+    user.roleValues.includes('RH') ||
+    user.roleValues.includes('COMMERCIAL') ||
+    user.roleValues.includes('COMPTABLE')
+  const canReports = isAdmin || user.roleValues.includes('COMMERCIAL') || user.roleValues.includes('COMPTABLE')
 
   useEffect(() => {
     let isMounted = true
@@ -2261,15 +2360,18 @@ function RoleOverviewPage({
       api.getWorkflows().catch(() => []),
       isAdmin ? api.getFinanceSummary().catch(() => null) : Promise.resolve(null),
       isAdmin || isRh ? api.getHrOverview().catch(() => null) : Promise.resolve(null),
+      canCommercial ? api.getCommercialOverview().catch(() => null) : Promise.resolve(null),
+      canDocuments ? api.getDocumentsOverview().catch(() => null) : Promise.resolve(null),
+      canReports ? api.getReportsSummary().catch(() => null) : Promise.resolve(null),
     ]
 
     Promise.all(requests)
-      .then(([events, workflows, finance, hr]) => {
+      .then(([events, workflows, finance, hr, commercial, documents, reports]) => {
         if (!isMounted) {
           return
         }
 
-        setOverview({ events, workflows, finance, hr })
+        setOverview({ commercial, documents, events, finance, hr, reports, workflows })
       })
       .catch((error) => {
         if (isMounted) {
@@ -2285,12 +2387,21 @@ function RoleOverviewPage({
     return () => {
       isMounted = false
     }
-  }, [isAdmin, isRh, user.roleValues])
+  }, [canCommercial, canDocuments, canReports, isAdmin, isRh, user.roleValues])
 
   const pendingAdminWorkflows = overview.workflows.filter(
     (workflow) => workflow.status === 'PENDING_ADMIN',
   )
   const pendingRhWorkflows = overview.workflows.filter((workflow) => workflow.status === 'PENDING_RH')
+  const activeWorkflowStatuses = ['PENDING_BUDGET', 'PENDING_RH', 'PENDING_ADMIN']
+  const activeCommercialWorkflows = overview.workflows.filter((workflow) =>
+    activeWorkflowStatuses.includes(workflow.status),
+  )
+  const commercialPipeline = overview.commercial?.pipeline ?? []
+  const maxPipelineCount = Math.max(...commercialPipeline.map((stage) => stage.count), 1)
+  const pendingQuotes = (overview.commercial?.quotes ?? []).filter((quote) =>
+    ['DRAFT', 'SENT'].includes(quote.status),
+  )
   const eventBars = overview.events.length
     ? overview.events.slice(0, 12).map((event, index) => 30 + ((index + event.title.length) % 9) * 7)
     : [36, 54, 42, 68, 48, 76, 58, 71]
@@ -2336,6 +2447,12 @@ function RoleOverviewPage({
             text={`${overview.events.length} evenement(s) visibles pour organiser les equipes.`}
             onClick={() => onOpenPanel('events')}
           />
+          <RoleActionCard
+            icon={FileText}
+            title="Documents RH"
+            text={`${overview.documents?.totals.pendingValidation ?? 0} document(s) attendent une validation.`}
+            onClick={() => onOpenPanel('documents')}
+          />
         </section>
         <section className="analytics-grid" aria-label="Synthese RH">
           <article className="chart-panel wide">
@@ -2370,6 +2487,156 @@ function RoleOverviewPage({
             <div className="donut-chart rh" aria-hidden="true"></div>
             <strong className="overview-big-number">{overview.hr?.totals.missionsUpcoming ?? 0}</strong>
           </article>
+        </section>
+      </section>
+    )
+  }
+
+  if (isCommercial && !isAdmin) {
+    return (
+      <section className="role-overview">
+        <OverviewHero
+          eyebrow="Dashboard Commercial"
+          title="Clients, prestations et devis."
+          description="Pilotez vos prospects, demandes de prestations, devis et relances commerciales sans les outils reserves a l'Admin."
+        />
+        {notice && <p className="auth-notice">{notice}</p>}
+        <OverviewKpis
+          cards={[
+            { label: 'Clients', value: overview.commercial?.totals.clients ?? 0, icon: Users, tone: 'blue' },
+            { label: 'Prospects ouverts', value: overview.commercial?.totals.prospects ?? 0, icon: UserPlus, tone: 'cyan' },
+            {
+              label: 'Demandes actives',
+              value: overview.commercial?.totals.openRequests ?? 0,
+              icon: ClipboardCheck,
+              tone: 'yellow',
+            },
+            {
+              label: 'CA gagne',
+              value: formatFcfa(overview.commercial?.totals.revenueFcfa ?? 0),
+              icon: Wallet,
+              tone: 'coral',
+            },
+          ]}
+        />
+
+        <section className="analytics-grid" aria-label="Pilotage commercial">
+          <article className="chart-panel wide">
+            <div className="panel-heading">
+              <strong>Pipeline commercial</strong>
+              <span>{isLoading ? 'Chargement...' : `${overview.commercial?.totals.prospects ?? 0} prospect(s)`}</span>
+            </div>
+            <div className="report-bars commercial-pipeline-bars">
+              {commercialPipeline.map((stage) => (
+                <article key={stage.status}>
+                  <span>{commercialStatusLabel(stage.status)}</span>
+                  <div>
+                    <i style={{ '--bar-width': `${Math.max((stage.count / maxPipelineCount) * 100, 8)}%` }}></i>
+                  </div>
+                  <strong>{stage.count}</strong>
+                  <small>{stage.status}</small>
+                </article>
+              ))}
+              {commercialPipeline.length === 0 && <p>Aucun pipeline charge.</p>}
+            </div>
+          </article>
+          <article className="chart-panel compact">
+            <div className="panel-heading">
+              <strong>Devis</strong>
+              <span>Performance</span>
+            </div>
+            <div className="donut-chart commercial" aria-hidden="true"></div>
+            <ul className="compact-list">
+              <li>
+                <span>Acceptes</span>
+                <strong>{overview.commercial?.totals.acceptedQuotes ?? 0}</strong>
+              </li>
+              <li>
+                <span>En cours</span>
+                <strong>{pendingQuotes.length}</strong>
+              </li>
+              <li>
+                <span>Alertes</span>
+                <strong>{notificationCount}</strong>
+              </li>
+            </ul>
+          </article>
+        </section>
+
+        <section className="business-dashboard-grid" aria-label="Suivi commercial recent">
+          <article className="settings-card">
+            <div className="settings-panel-heading">
+              <div>
+                <p className="eyebrow">Demandes de prestations</p>
+                <h2>A suivre.</h2>
+              </div>
+            </div>
+            <ul className="compact-list">
+              {(overview.commercial?.requests ?? []).slice(0, 5).map((request) => (
+                <li key={request.id}>
+                  <span>{request.client?.name ?? 'Client'}</span>
+                  <strong>{request.title}</strong>
+                </li>
+              ))}
+              {!overview.commercial?.requests?.length && <li>Aucune demande de prestation.</li>}
+            </ul>
+          </article>
+          <article className="settings-card">
+            <div className="settings-panel-heading">
+              <div>
+                <p className="eyebrow">Devis recents</p>
+                <h2>Montants et statuts.</h2>
+              </div>
+            </div>
+            <ul className="compact-list">
+              {(overview.commercial?.quotes ?? []).slice(0, 5).map((quote) => (
+                <li key={quote.id}>
+                  <span>{quoteStatusLabel(quote.status)} - {quote.client?.name ?? 'Client'}</span>
+                  <strong>{formatFcfa(quote.amountFcfa)}</strong>
+                </li>
+              ))}
+              {!overview.commercial?.quotes?.length && <li>Aucun devis commercial.</li>}
+            </ul>
+          </article>
+        </section>
+
+        <section className="role-action-grid" aria-label="Actions rapides Commercial">
+          <RoleActionCard
+            icon={UserPlus}
+            title="Ajouter un client"
+            text="Creez un prospect, renseignez ses contacts et suivez son statut commercial."
+            onClick={() => onOpenPanel('commercial')}
+          />
+          <RoleActionCard
+            icon={ClipboardCheck}
+            title="Creer une prestation"
+            text={`${overview.commercial?.totals.openRequests ?? 0} demande(s) active(s) dans le pipeline.`}
+            onClick={() => onOpenPanel('commercial')}
+          />
+          <RoleActionCard
+            icon={Layers}
+            title="Suivre les workflows"
+            text={`${activeCommercialWorkflows.length} workflow(s) en cours de budget, RH ou validation.`}
+            onClick={() => onOpenPanel('workflows')}
+          />
+          <RoleActionCard
+            icon={FileText}
+            title="Documents commerciaux"
+            text={`${overview.documents?.totals.documents ?? 0} document(s), devis, contrats ou factures classes.`}
+            onClick={() => onOpenPanel('documents')}
+          />
+          <RoleActionCard
+            icon={Activity}
+            title="Rapports"
+            text={`${overview.reports?.commercialPerformance.acceptedQuotes ?? 0} devis accepte(s) sur la periode.`}
+            onClick={() => onOpenPanel('reports')}
+          />
+          <RoleActionCard
+            icon={Bell}
+            title="Alertes"
+            text={`${notificationCount} notification(s) a consulter pour vos actions commerciales.`}
+            onClick={() => onOpenPanel('alerts')}
+          />
         </section>
       </section>
     )
@@ -2428,6 +2695,14 @@ function RoleOverviewPage({
           onClick={() => onOpenPanel('workflows')}
         />
         <RoleActionCard
+          icon={UserPlus}
+          title="Pipeline commercial"
+          text={`${overview.commercial?.totals.prospects ?? 0} prospect(s), ${formatFcfa(
+            overview.commercial?.totals.revenueFcfa ?? 0,
+          )} gagne(s).`}
+          onClick={() => onOpenPanel('commercial')}
+        />
+        <RoleActionCard
           icon={Wallet}
           title="Controle financier"
           text={`${formatFcfa(overview.finance?.totals.pendingPaymentsFcfa ?? 0)} en paiements a suivre.`}
@@ -2438,6 +2713,14 @@ function RoleOverviewPage({
           title="Equipe et RH"
           text={`${overview.hr?.totals.personnel ?? 0} profil(s) actifs dans le personnel.`}
           onClick={() => onOpenPanel('team')}
+        />
+        <RoleActionCard
+          icon={FileText}
+          title="Documents et rapports"
+          text={`${overview.documents?.totals.pendingValidation ?? 0} validation(s), ${
+            overview.reports?.totals.completedEvents ?? 0
+          } evenement(s) realises.`}
+          onClick={() => onOpenPanel('documents')}
         />
       </section>
     </section>
@@ -2589,6 +2872,1111 @@ function ModuleHeader({ description, icon: Icon, label, title }) {
         <p>{description}</p>
       </div>
     </div>
+  )
+}
+
+function CommercialPage({ user }) {
+  const [overview, setOverview] = useState(null)
+  const [events, setEvents] = useState([])
+  const [selectedClientId, setSelectedClientId] = useState('')
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const refreshCommercial = useCallback(async () => {
+    setNotice('')
+    const [nextOverview, nextEvents] = await Promise.all([
+      api.getCommercialOverview(),
+      api.getEvents().catch(() => []),
+    ])
+
+    setOverview(nextOverview)
+    setEvents(nextEvents)
+    setSelectedClientId((current) => current || nextOverview.clients[0]?.id || '')
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    Promise.all([api.getCommercialOverview(), api.getEvents().catch(() => [])])
+      .then(([nextOverview, nextEvents]) => {
+        if (!isMounted) {
+          return
+        }
+
+        setOverview(nextOverview)
+        setEvents(nextEvents)
+        setSelectedClientId((current) => current || nextOverview.clients[0]?.id || '')
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [refreshCommercial])
+
+  const selectedClient = overview?.clients.find((client) => client.id === selectedClientId)
+
+  const submitClient = async (event) => {
+    event.preventDefault()
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const formData = new FormData(event.currentTarget)
+      await api.createCommercialClient({
+        name: getFormValue(formData, 'name'),
+        contactName: getFormValue(formData, 'contactName'),
+        email: getFormValue(formData, 'email'),
+        phone: getFormValue(formData, 'phone'),
+        address: getFormValue(formData, 'address'),
+        source: getFormValue(formData, 'source'),
+        status: getFormValue(formData, 'status') || 'NEW',
+        notes: getFormValue(formData, 'notes'),
+      })
+      event.currentTarget.reset()
+      await refreshCommercial()
+      setNotice('Client ajoute au pipeline commercial.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const updateClientStatus = async (client, status) => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.updateCommercialClient(client.id, { status })
+      await refreshCommercial()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitRequest = async (event) => {
+    event.preventDefault()
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const formData = new FormData(event.currentTarget)
+      const nextOverview = await api.createServiceRequest({
+        clientId: getFormValue(formData, 'clientId'),
+        eventId: getFormValue(formData, 'eventId'),
+        title: getFormValue(formData, 'title'),
+        description: getFormValue(formData, 'description'),
+        expectedBudgetFcfa: Number(getFormValue(formData, 'expectedBudgetFcfa') || 0),
+        status: getFormValue(formData, 'status') || 'NEW',
+        dueAt: getFormValue(formData, 'dueAt'),
+      })
+      setOverview(nextOverview)
+      event.currentTarget.reset()
+      setNotice('Demande de prestation creee.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitQuote = async (event) => {
+    event.preventDefault()
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const formData = new FormData(event.currentTarget)
+      const nextOverview = await api.createCommercialQuote({
+        clientId: getFormValue(formData, 'clientId'),
+        requestId: getFormValue(formData, 'requestId'),
+        eventId: getFormValue(formData, 'eventId'),
+        title: getFormValue(formData, 'title'),
+        amountFcfa: Number(getFormValue(formData, 'amountFcfa') || 0),
+        status: getFormValue(formData, 'status') || 'DRAFT',
+        validUntil: getFormValue(formData, 'validUntil'),
+        notes: getFormValue(formData, 'notes'),
+      })
+      setOverview(nextOverview)
+      event.currentTarget.reset()
+      setNotice('Devis commercial cree.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitExchange = async (event) => {
+    event.preventDefault()
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const formData = new FormData(event.currentTarget)
+      const nextOverview = await api.createClientExchange({
+        clientId: getFormValue(formData, 'clientId'),
+        channel: getFormValue(formData, 'channel'),
+        subject: getFormValue(formData, 'subject'),
+        notes: getFormValue(formData, 'notes'),
+      })
+      setOverview(nextOverview)
+      event.currentTarget.reset()
+      setNotice('Echange client ajoute a l historique.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className="module-page" aria-label="Module commercial">
+      <ModuleHeader
+        description={`Pipeline clients, demandes de prestations, devis et historique d'echanges pour ${user.role}.`}
+        icon={UserPlus}
+        label="Commercial / Clients"
+        title="Pipeline commercial."
+      />
+      {notice && <p className="auth-notice">{notice}</p>}
+
+      <section className="finance-kpi-grid">
+        <article className="visual-panel">
+          <span>Clients</span>
+          <strong>{overview?.totals.clients ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Prospects ouverts</span>
+          <strong>{overview?.totals.prospects ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Demandes actives</span>
+          <strong>{overview?.totals.openRequests ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>CA gagne</span>
+          <strong>{formatFcfa(overview?.totals.revenueFcfa ?? 0)}</strong>
+        </article>
+      </section>
+
+      <section className="business-dashboard-grid">
+        <form className="settings-card business-form" onSubmit={submitClient}>
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Client</p>
+              <h2>Ajouter un prospect.</h2>
+            </div>
+          </div>
+          <div className="form-grid">
+            <label>
+              Nom client
+              <input name="name" type="text" placeholder="Entreprise ou particulier" required />
+            </label>
+            <label>
+              Contact
+              <input name="contactName" type="text" placeholder="Interlocuteur" />
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" placeholder="client@example.com" />
+            </label>
+            <label>
+              Telephone
+              <input name="phone" type="text" placeholder="+225..." />
+            </label>
+            <label>
+              Adresse
+              <input name="address" type="text" placeholder="Adresse du client" />
+            </label>
+            <label>
+              Source
+              <input name="source" type="text" placeholder="Recommandation, reseaux, appel..." />
+            </label>
+            <label>
+              Statut
+              <select name="status" defaultValue="NEW">
+                {commercialStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="wide-field">
+              Notes
+              <textarea name="notes" placeholder="Besoin, contexte, prochain contact"></textarea>
+            </label>
+          </div>
+          <button type="submit" className="primary-button" disabled={isSaving}>
+            Ajouter
+          </button>
+        </form>
+
+        <section className="settings-card">
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Pipeline</p>
+              <h2>Suivi des prospects.</h2>
+            </div>
+            <button type="button" className="secondary-button bordered" onClick={refreshCommercial}>
+              Actualiser
+            </button>
+          </div>
+          <div className="pipeline-stage-grid">
+            {(overview?.pipeline ?? []).map((stage) => (
+              <article key={stage.status}>
+                <span>{commercialStatusLabel(stage.status)}</span>
+                <strong>{stage.count}</strong>
+              </article>
+            ))}
+          </div>
+          <div className="business-list">
+            {(overview?.clients ?? []).map((client) => (
+              <button
+                type="button"
+                className={selectedClientId === client.id ? 'active' : ''}
+                key={client.id}
+                onClick={() => setSelectedClientId(client.id)}
+              >
+                <span>{commercialStatusLabel(client.status)}</span>
+                <strong>{client.name}</strong>
+                <small>{client.email || client.phone || 'Contact a completer'}</small>
+              </button>
+            ))}
+            {!overview?.clients?.length && (
+              <p className="approval-empty">{isLoading ? 'Chargement...' : 'Aucun client commercial.'}</p>
+            )}
+          </div>
+        </section>
+      </section>
+
+      <section className="business-dashboard-grid">
+        <form className="settings-card business-form" onSubmit={submitRequest}>
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Prestation</p>
+              <h2>Creer une demande.</h2>
+            </div>
+          </div>
+          <div className="form-grid">
+            <label>
+              Client
+              <select name="clientId" defaultValue={selectedClientId} required>
+                <option value="">Choisir</option>
+                {(overview?.clients ?? []).map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Evenement lie
+              <select name="eventId" defaultValue="">
+                <option value="">Sans evenement</option>
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Objet
+              <input name="title" type="text" placeholder="Concert, prestation, sponsoring..." required />
+            </label>
+            <label>
+              Budget attendu
+              <input name="expectedBudgetFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              Statut
+              <select name="status" defaultValue="NEW">
+                {serviceRequestStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Echeance
+              <input name="dueAt" type="datetime-local" />
+            </label>
+            <label className="wide-field">
+              Description
+              <textarea name="description" placeholder="Besoin client et informations importantes"></textarea>
+            </label>
+          </div>
+          <button type="submit" className="primary-button" disabled={isSaving}>
+            Creer la demande
+          </button>
+        </form>
+
+        <article className="settings-card business-detail">
+          {selectedClient ? (
+            <>
+              <div className="settings-panel-heading">
+                <div>
+                  <p className="eyebrow">{commercialStatusLabel(selectedClient.status)}</p>
+                  <h2>{selectedClient.name}</h2>
+                  <p>{selectedClient.notes || 'Aucune note commerciale.'}</p>
+                </div>
+              </div>
+              <div className="settings-meta-grid">
+                <article>
+                  <span>Contact</span>
+                  <strong>{selectedClient.contactName || 'Non renseigne'}</strong>
+                </article>
+                <article>
+                  <span>Email</span>
+                  <strong>{selectedClient.email || 'Non renseigne'}</strong>
+                </article>
+                <article>
+                  <span>Demandes</span>
+                  <strong>{selectedClient.serviceRequests.length}</strong>
+                </article>
+                <article>
+                  <span>Devis</span>
+                  <strong>{selectedClient.quotes.length}</strong>
+                </article>
+              </div>
+              <div className="approval-actions">
+                {commercialStatusOptions.map((status) => (
+                  <button
+                    type="button"
+                    className="secondary-button bordered"
+                    disabled={isSaving || selectedClient.status === status.value}
+                    key={status.value}
+                    onClick={() => updateClientStatus(selectedClient, status.value)}
+                  >
+                    {status.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="approval-empty">Selectionnez un client pour voir son detail.</p>
+          )}
+        </article>
+      </section>
+
+      <section className="business-dashboard-grid">
+        <form className="settings-card business-form" onSubmit={submitQuote}>
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Devis</p>
+              <h2>Creer un devis.</h2>
+            </div>
+          </div>
+          <div className="form-grid">
+            <label>
+              Client
+              <select name="clientId" defaultValue={selectedClientId} required>
+                <option value="">Choisir</option>
+                {(overview?.clients ?? []).map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Demande
+              <select name="requestId" defaultValue="">
+                <option value="">Sans demande</option>
+                {(overview?.requests ?? []).map((request) => (
+                  <option key={request.id} value={request.id}>
+                    {request.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Titre
+              <input name="title" type="text" placeholder="Devis production..." required />
+            </label>
+            <label>
+              Montant
+              <input name="amountFcfa" type="number" min="0" placeholder="FCFA" required />
+            </label>
+            <label>
+              Statut
+              <select name="status" defaultValue="DRAFT">
+                {quoteStatusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Valide jusqu'au
+              <input name="validUntil" type="datetime-local" />
+            </label>
+            <label className="wide-field">
+              Notes
+              <textarea name="notes" placeholder="Conditions, delais, options"></textarea>
+            </label>
+          </div>
+          <button type="submit" className="primary-button" disabled={isSaving}>
+            Enregistrer le devis
+          </button>
+        </form>
+
+        <form className="settings-card business-form" onSubmit={submitExchange}>
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Historique</p>
+              <h2>Ajouter un echange.</h2>
+            </div>
+          </div>
+          <div className="form-grid">
+            <label>
+              Client
+              <select name="clientId" defaultValue={selectedClientId} required>
+                <option value="">Choisir</option>
+                {(overview?.clients ?? []).map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Canal
+              <input name="channel" type="text" placeholder="WhatsApp, appel, email..." required />
+            </label>
+            <label>
+              Sujet
+              <input name="subject" type="text" placeholder="Relance, validation, negociation..." />
+            </label>
+            <label className="wide-field">
+              Compte rendu
+              <textarea name="notes" placeholder="Resume de l'echange" required></textarea>
+            </label>
+          </div>
+          <button type="submit" className="primary-button" disabled={isSaving}>
+            Ajouter l'echange
+          </button>
+        </form>
+      </section>
+
+      <section className="settings-card">
+        <div className="settings-panel-heading">
+          <div>
+            <p className="eyebrow">Devis et demandes</p>
+            <h2>Suivi operationnel.</h2>
+          </div>
+        </div>
+        <div className="finance-table business-table">
+          {(overview?.quotes ?? []).slice(0, 8).map((quote) => (
+            <div key={quote.id}>
+              <span>{quote.quoteNumber}</span>
+              <em>{quote.client.name}</em>
+              <strong>{formatFcfa(quote.amountFcfa)}</strong>
+              <small>{quoteStatusLabel(quote.status)}</small>
+            </div>
+          ))}
+          {!overview?.quotes?.length && <p>Aucun devis commercial.</p>}
+        </div>
+      </section>
+    </section>
+  )
+}
+
+function DocumentsPage({ isAdmin }) {
+  const [overview, setOverview] = useState(null)
+  const [events, setEvents] = useState([])
+  const [clients, setClients] = useState([])
+  const [users, setUsers] = useState([])
+  const [scope, setScope] = useState('COMPANY')
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const refreshDocuments = useCallback(async () => {
+    setNotice('')
+    const [nextOverview, nextEvents, nextClients, nextUsers] = await Promise.all([
+      api.getDocumentsOverview(),
+      api.getEvents().catch(() => []),
+      api.getCommercialClients().catch(() => []),
+      api.getUsers().catch(() => []),
+    ])
+
+    setOverview(nextOverview)
+    setEvents(nextEvents)
+    setClients(nextClients)
+    setUsers(nextUsers)
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    Promise.all([
+      api.getDocumentsOverview(),
+      api.getEvents().catch(() => []),
+      api.getCommercialClients().catch(() => []),
+      api.getUsers().catch(() => []),
+    ])
+      .then(([nextOverview, nextEvents, nextClients, nextUsers]) => {
+        if (!isMounted) {
+          return
+        }
+
+        setOverview(nextOverview)
+        setEvents(nextEvents)
+        setClients(nextClients)
+        setUsers(nextUsers)
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [refreshDocuments])
+
+  const targetPayload = (formData) => ({
+    eventId: scope === 'EVENT' ? getFormValue(formData, 'eventId') : '',
+    clientId: scope === 'CLIENT' ? getFormValue(formData, 'clientId') : '',
+    userId: scope === 'USER' ? getFormValue(formData, 'userId') : '',
+  })
+
+  const submitDocument = async (event) => {
+    event.preventDefault()
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const formData = new FormData(event.currentTarget)
+      const file = formData.get('file')
+      const fileUrl = await fileToDataUrl(file)
+      await api.createBusinessDocument({
+        scope,
+        ...targetPayload(formData),
+        label: getFormValue(formData, 'label'),
+        type: getFormValue(formData, 'type') || 'OTHER',
+        status: getFormValue(formData, 'status') || 'PENDING_VALIDATION',
+        url: fileUrl || getFormValue(formData, 'url'),
+        fileName: file?.name,
+        mimeType: file?.type,
+        sizeBytes: file?.size,
+        notes: getFormValue(formData, 'notes'),
+      })
+      event.currentTarget.reset()
+      await refreshDocuments()
+      setNotice('Document ajoute et classe.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const generateDocument = async (event) => {
+    event.preventDefault()
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const formData = new FormData(event.currentTarget)
+      await api.generateBusinessDocument({
+        scope,
+        ...targetPayload(formData),
+        label: getFormValue(formData, 'label'),
+        type: getFormValue(formData, 'type') || 'QUOTE',
+        templateName: getFormValue(formData, 'templateName') || 'Modele M Group',
+        amountFcfa: Number(getFormValue(formData, 'amountFcfa') || 0),
+        notes: getFormValue(formData, 'notes'),
+      })
+      event.currentTarget.reset()
+      await refreshDocuments()
+      setNotice('Document PDF genere avec le modele M Group.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const validateDocument = async (document, status) => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.validateBusinessDocument(document.id, { status })
+      await refreshDocuments()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const targetSelect = (
+    <>
+      {scope === 'EVENT' && (
+        <label>
+          Evenement
+          <select name="eventId" required>
+            <option value="">Choisir</option>
+            {events.map((event) => (
+              <option key={event.id} value={event.id}>
+                {event.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {scope === 'CLIENT' && (
+        <label>
+          Client
+          <select name="clientId" required>
+            <option value="">Choisir</option>
+            {clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {scope === 'USER' && (
+        <label>
+          Utilisateur
+          <select name="userId" required>
+            <option value="">Choisir</option>
+            {users.map((item) => (
+              <option key={item.id} value={item.id}>
+                {userDisplayName(item)}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
+  )
+
+  return (
+    <section className="module-page" aria-label="Module documents">
+      <ModuleHeader
+        description="Classez les fichiers par evenement, client, utilisateur ou entreprise, puis faites valider les documents sensibles."
+        icon={FileText}
+        label="Documents"
+        title="Centre documentaire."
+      />
+      {notice && <p className="auth-notice">{notice}</p>}
+
+      <section className="finance-kpi-grid">
+        <article className="visual-panel">
+          <span>Documents</span>
+          <strong>{overview?.totals.documents ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>A valider</span>
+          <strong>{overview?.totals.pendingValidation ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Valides</span>
+          <strong>{overview?.totals.approved ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Archives</span>
+          <strong>{overview?.totals.archived ?? 0}</strong>
+        </article>
+      </section>
+
+      <section className="business-dashboard-grid">
+        <form className="settings-card business-form" onSubmit={submitDocument}>
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Upload securise</p>
+              <h2>Classer un fichier.</h2>
+            </div>
+          </div>
+          <div className="form-grid">
+            <label>
+              Cible
+              <select value={scope} onChange={(event) => setScope(event.target.value)}>
+                {documentScopeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {targetSelect}
+            <label>
+              Type
+              <select name="type" defaultValue="OTHER">
+                {businessDocumentTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Statut
+              <select name="status" defaultValue="PENDING_VALIDATION">
+                {businessDocumentStatuses.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Libelle
+              <input name="label" type="text" placeholder="Contrat, facture, fiche..." required />
+            </label>
+            <label>
+              Fichier
+              <input name="file" type="file" />
+            </label>
+            <label className="wide-field">
+              URL externe
+              <input name="url" type="text" placeholder="Lien prive si le fichier est deja stocke" />
+            </label>
+            <label className="wide-field">
+              Notes
+              <textarea name="notes" placeholder="Contexte, validation, version"></textarea>
+            </label>
+          </div>
+          <button type="submit" className="primary-button" disabled={isSaving}>
+            Enregistrer
+          </button>
+        </form>
+
+        <form className="settings-card business-form" onSubmit={generateDocument}>
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Modele M Group</p>
+              <h2>Generer un PDF.</h2>
+            </div>
+          </div>
+          <div className="form-grid">
+            {targetSelect}
+            <label>
+              Type
+              <select name="type" defaultValue="QUOTE">
+                {businessDocumentTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Libelle
+              <input name="label" type="text" placeholder="Devis M Group..." required />
+            </label>
+            <label>
+              Modele
+              <input name="templateName" type="text" placeholder="Modele M Group" />
+            </label>
+            <label>
+              Montant
+              <input name="amountFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label className="wide-field">
+              Notes
+              <textarea name="notes" placeholder="Elements a faire apparaitre"></textarea>
+            </label>
+          </div>
+          <button type="submit" className="primary-button" disabled={isSaving}>
+            Generer
+          </button>
+        </form>
+      </section>
+
+      <section className="settings-card">
+        <div className="settings-panel-heading">
+          <div>
+            <p className="eyebrow">Documents classes</p>
+            <h2>Validation interne.</h2>
+          </div>
+          <button type="button" className="secondary-button bordered" onClick={refreshDocuments}>
+            Actualiser
+          </button>
+        </div>
+        <div className="document-list">
+          {(overview?.documents ?? []).map((document) => (
+            <article key={document.id}>
+              <div>
+                <span>{businessDocumentTypeLabel(document.type)} - {documentScopeLabel(document.scope)}</span>
+                <strong>{document.label}</strong>
+                <small>{businessDocumentStatusLabel(document.status)}</small>
+              </div>
+              <div className="approval-actions">
+                <a className="secondary-button bordered" href={document.url} target="_blank" rel="noreferrer">
+                  Ouvrir
+                </a>
+                {isAdmin && (
+                  <>
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={isSaving}
+                      onClick={() => validateDocument(document, 'APPROVED')}
+                    >
+                      Valider
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-button"
+                      disabled={isSaving}
+                      onClick={() => validateDocument(document, 'REJECTED')}
+                    >
+                      Refuser
+                    </button>
+                  </>
+                )}
+              </div>
+            </article>
+          ))}
+          {!overview?.documents?.length && (
+            <p className="approval-empty">{isLoading ? 'Chargement...' : 'Aucun document.'}</p>
+          )}
+        </div>
+      </section>
+    </section>
+  )
+}
+
+function ReportsPage() {
+  const [summary, setSummary] = useState(null)
+  const [filters, setFilters] = useState({ periodStart: '', periodEnd: '' })
+  const [notice, setNotice] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const refreshReports = useCallback(async (nextFilters = filters) => {
+    setNotice('')
+    const result = await api.getReportsSummary(nextFilters)
+    setSummary(result)
+  }, [filters])
+
+  useEffect(() => {
+    let isMounted = true
+
+    api
+      .getReportsSummary()
+      .then((result) => {
+        if (!isMounted) {
+          return
+        }
+
+        setSummary(result)
+      })
+      .catch((error) => {
+        if (isMounted) {
+          setNotice(error.message)
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [refreshReports])
+
+  const submitFilters = async (event) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    const nextFilters = {
+      periodStart: getFormValue(formData, 'periodStart'),
+      periodEnd: getFormValue(formData, 'periodEnd'),
+    }
+    setFilters(nextFilters)
+    await refreshReports(nextFilters)
+  }
+
+  const exportReport = async (format) => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const exportLog = await api.exportReport({
+        ...filters,
+        format,
+        title: `Rapport M Group ${format}`,
+      })
+      setSummary((current) =>
+        current
+          ? {
+              ...current,
+              exports: [exportLog, ...(current.exports ?? [])],
+            }
+          : current,
+      )
+      window.open(exportLog.fileUrl, '_blank', 'noopener,noreferrer')
+      setNotice(`Rapport ${format} genere.`)
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className="module-page" aria-label="Module rapports">
+      <ModuleHeader
+        description="Analysez le chiffre d'affaires, les evenements, les budgets, les depenses et les performances commerciales."
+        icon={Activity}
+        label="Rapports"
+        title="Analyse de performance."
+      />
+      {notice && <p className="auth-notice">{notice}</p>}
+
+      <form className="settings-card report-filter-form" onSubmit={submitFilters}>
+        <label>
+          Debut
+          <input name="periodStart" type="datetime-local" defaultValue={filters.periodStart} />
+        </label>
+        <label>
+          Fin
+          <input name="periodEnd" type="datetime-local" defaultValue={filters.periodEnd} />
+        </label>
+        <button type="submit" className="primary-button">
+          Filtrer
+        </button>
+        <button type="button" className="secondary-button bordered" disabled={isSaving} onClick={() => exportReport('PDF')}>
+          Export PDF
+        </button>
+        <button type="button" className="secondary-button bordered" disabled={isSaving} onClick={() => exportReport('EXCEL')}>
+          Export Excel
+        </button>
+      </form>
+
+      <section className="finance-kpi-grid">
+        <article className="visual-panel">
+          <span>Chiffre d'affaires</span>
+          <strong>{formatFcfa(summary?.totals.revenueFcfa ?? 0)}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Evenements realises</span>
+          <strong>{summary?.totals.completedEvents ?? 0}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Budget consomme</span>
+          <strong>{formatFcfa(summary?.totals.consumedBudgetFcfa ?? 0)}</strong>
+        </article>
+        <article className="visual-panel">
+          <span>Utilisateurs actifs</span>
+          <strong>{summary?.totals.activeUsers ?? 0}</strong>
+        </article>
+      </section>
+
+      <section className="analytics-grid">
+        <article className="chart-panel wide">
+          <div className="panel-heading">
+            <strong>Depenses par categorie</strong>
+            <span>{summary?.totals.budgetConsumptionRate ?? 0}% du budget prevu</span>
+          </div>
+          <div className="report-bars">
+            {(summary?.expensesByCategory ?? []).slice(0, 6).map((item, index) => {
+              const max = Math.max(...(summary?.expensesByCategory ?? [{ amountFcfa: 1 }]).map((entry) => entry.amountFcfa), 1)
+              return (
+                <article key={item.category}>
+                  <span>{item.category}</span>
+                  <div>
+                    <i style={{ '--bar-width': `${Math.max((item.amountFcfa / max) * 100, 8)}%` }}></i>
+                  </div>
+                  <strong>{formatFcfa(item.amountFcfa)}</strong>
+                  <small>{index + 1}</small>
+                </article>
+              )
+            })}
+            {!summary?.expensesByCategory?.length && <p>{isLoading ? 'Chargement...' : 'Aucune depense.'}</p>}
+          </div>
+        </article>
+        <article className="chart-panel compact">
+          <div className="panel-heading">
+            <strong>Performance commerciale</strong>
+            <span>Devis</span>
+          </div>
+          <div className="donut-chart budget" aria-hidden="true"></div>
+          <ul className="compact-list">
+            <li>
+              <span>Acceptes</span>
+              <strong>{summary?.commercialPerformance.acceptedQuotes ?? 0}</strong>
+            </li>
+            <li>
+              <span>En cours</span>
+              <strong>{summary?.commercialPerformance.pendingQuotes ?? 0}</strong>
+            </li>
+            <li>
+              <span>Rejetes</span>
+              <strong>{summary?.commercialPerformance.rejectedQuotes ?? 0}</strong>
+            </li>
+          </ul>
+        </article>
+      </section>
+
+      <section className="business-dashboard-grid">
+        <article className="settings-card">
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Top clients</p>
+              <h2>Revenus gagnes.</h2>
+            </div>
+          </div>
+          <ul className="compact-list">
+            {(summary?.topClients ?? []).map((client) => (
+              <li key={client.id}>
+                <span>{client.name}</span>
+                <strong>{formatFcfa(client.revenueFcfa)}</strong>
+              </li>
+            ))}
+            {!summary?.topClients?.length && <li>Aucun client gagne.</li>}
+          </ul>
+        </article>
+        <article className="settings-card">
+          <div className="settings-panel-heading">
+            <div>
+              <p className="eyebrow">Exports</p>
+              <h2>Historique.</h2>
+            </div>
+          </div>
+          <ul className="compact-list">
+            {(summary?.exports ?? []).slice(0, 8).map((item) => (
+              <li key={item.id}>
+                <span>{item.title}</span>
+                <strong>{item.format}</strong>
+              </li>
+            ))}
+            {!summary?.exports?.length && <li>Aucun export.</li>}
+          </ul>
+        </article>
+      </section>
+    </section>
   )
 }
 

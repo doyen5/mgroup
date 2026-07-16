@@ -79,11 +79,14 @@ mgroup-app/
         |-- main.ts
         |-- app.module.ts
         |-- auth/
+        |-- commercial/
         |-- setup/
         |-- users/
+        |-- documents/
         |-- events/
         |-- finance/
         |-- hr/
+        |-- reports/
         |-- workflows/
         |-- notifications/
         |-- prisma/
@@ -319,7 +322,7 @@ Le dashboard Admin contient maintenant :
 - des cartes statistiques colorees avec icones `lucide-react` ;
 - des panneaux graphiques visuels avec activite evenementielle, budget et montants en FCFA ;
 - des actions rapides vers les modules prioritaires ;
-- des pages internes accessibles depuis le menu : Vue generale, Inscriptions, Workflows, Evenements, Equipe/RH, Finances, Budget, Alertes et Parametres ;
+- des pages internes accessibles depuis le menu : Vue generale, Inscriptions, Workflows, Evenements, Commercial, Equipe/RH, Finances, Budget, Documents, Rapports, Alertes et Parametres ;
 - des alertes sonores cote navigateur pour prevenir l'Admin lors des changements importants ;
 - la validation des inscriptions en attente depuis PostgreSQL.
 - une section `Parametres` complete pour le profil, la securite, l'entreprise, les utilisateurs, les preferences, les notifications, les modules et le journal d'activite.
@@ -337,9 +340,12 @@ Vue generale
 Inscriptions
 Workflows
 Evenements
+Commercial
 Equipe / RH
 Finances
 Budget
+Documents
+Rapports
 Alertes
 Parametres
 ```
@@ -351,6 +357,7 @@ Vue generale
 Equipe / RH
 Workflows
 Evenements
+Documents
 Alertes
 Parametres
 ```
@@ -361,6 +368,8 @@ Comptable :
 Vue generale
 Finances
 Budget
+Documents
+Rapports
 Workflows
 Evenements
 Alertes
@@ -371,16 +380,21 @@ Commercial :
 
 ```txt
 Vue generale
+Commercial
 Workflows
 Evenements
+Documents
+Rapports
 Alertes
 Parametres
 ```
 
 La vue generale n'est plus statique. Elle charge les donnees API selon le role :
 
-- Admin : inscriptions en attente, evenements, budgets, paiements, workflows a valider, personnel RH et alertes ;
-- RH : personnel actif, disponibilites, workflows RH, evenements, contrats, missions et alertes ;
+- Admin : inscriptions en attente, evenements, pipeline commercial, budgets, paiements, documents, rapports, workflows a valider, personnel RH et alertes ;
+- RH : personnel actif, disponibilites, workflows RH, evenements, documents RH, contrats, missions et alertes ;
+- Commercial : clients, prospects, demandes de prestations, devis, documents commerciaux, rapports et workflows ;
+- Comptable : finances, budgets, documents financiers, rapports, workflows et alertes ;
 - autres profils : vue reduite selon les modules autorises.
 
 Les anciens pictogrammes texte du menu ont ete remplaces par des icones `lucide-react`.
@@ -662,6 +676,95 @@ Tables ajoutees :
 - `StaffDocument`
 - `StaffMission`
 
+## Module commercial / clients
+
+La priorite commerciale ajoute un module `Commercial` accessible aux roles `ADMIN`,
+`COMMERCIAL` et `COMPTABLE`.
+
+Fonctionnalites disponibles :
+
+- gestion des clients et prospects ;
+- demande de prestation rattachee a un client et optionnellement a un evenement ;
+- devis commerciaux numerotes automatiquement (`MG-annee-numero`) ;
+- suivi du pipeline avec statuts `NEW`, `IN_DISCUSSION`, `WON`, `LOST` ;
+- suivi des demandes avec statuts `NEW`, `IN_DISCUSSION`, `QUOTED`, `WON`, `LOST`, `CANCELLED` ;
+- suivi des devis avec statuts `DRAFT`, `SENT`, `ACCEPTED`, `REJECTED`, `EXPIRED` ;
+- historique des echanges par client : canal, sujet, notes et date ;
+- cartes KPI : clients, prospects ouverts, demandes actives et chiffre d'affaires gagne.
+
+Le dashboard affiche une page interactive avec :
+
+- une vue generale propre au Commercial, sans cartes Admin ;
+- les KPI clients, prospects ouverts, demandes actives et chiffre d'affaires gagne ;
+- un graphique de pipeline commercial par statut ;
+- un resume des devis acceptes, en cours et des alertes ;
+- les demandes de prestations et devis recents ;
+- formulaire d'ajout de client/prospect ;
+- pipeline par statut ;
+- fiche detail client ;
+- creation de demande de prestation ;
+- creation de devis ;
+- ajout d'un echange client ;
+- liste des derniers devis.
+
+Tables ajoutees :
+
+- `CommercialClient`
+- `ServiceRequest`
+- `CommercialQuote`
+- `ClientExchange`
+
+## Module documents
+
+La priorite documents ajoute un centre documentaire transversal accessible aux roles `ADMIN`,
+`RH`, `COMPTABLE` et `COMMERCIAL`.
+
+Fonctionnalites disponibles :
+
+- upload prototype de fichier par URL ou Data URL ;
+- classement par entreprise, evenement, client ou utilisateur ;
+- types : devis, facture, recu, contrat, fiche technique, photo, administratif, rapport ou autre ;
+- statuts : brouillon, a valider, valide, rejete, signe, archive ;
+- generation prototype de PDF avec modele M Group et logo inclus ;
+- validation ou rejet interne reserve a l'Admin ;
+- notifications Admin quand un document attend validation.
+
+Important : le stockage fichier actuel reste adapte au developpement. En production, les Data URLs doivent etre remplacees par un stockage prive avec antivirus, taille limitee, URL signee et journalisation d'acces.
+
+Table ajoutee :
+
+- `BusinessDocument`
+
+## Module rapports
+
+La priorite rapports ajoute un module `Rapports` pour les roles `ADMIN`, `COMPTABLE` et
+`COMMERCIAL`.
+
+Fonctionnalites disponibles :
+
+- chiffre d'affaires par periode a partir des devis acceptes ;
+- evenements realises ;
+- budgets prevus et budgets consommes ;
+- depenses par categorie ;
+- utilisateurs actifs par derniere connexion ;
+- performance commerciale : devis acceptes, en cours, rejetes ;
+- top clients par revenu gagne ;
+- export PDF ou Excel prototype ;
+- historique des exports en base.
+
+Le dashboard affiche :
+
+- filtres debut/fin ;
+- cartes KPI ;
+- barres de depenses par categorie ;
+- synthese de performance commerciale ;
+- top clients ;
+- historique des exports.
+
+Table ajoutee :
+
+- `ReportExport`
+
 ## Remember me et mot de passe oublie
 
 `Remember me` fonctionne ainsi :
@@ -801,6 +904,37 @@ POST  /api/hr/staff/:userId/documents
 POST  /api/hr/staff/:userId/missions
 ```
 
+Commercial :
+
+```txt
+GET   /api/commercial/overview
+GET   /api/commercial/clients
+POST  /api/commercial/clients
+PATCH /api/commercial/clients/:clientId
+POST  /api/commercial/requests
+PATCH /api/commercial/requests/:requestId
+POST  /api/commercial/quotes
+PATCH /api/commercial/quotes/:quoteId
+POST  /api/commercial/exchanges
+```
+
+Documents :
+
+```txt
+GET   /api/documents/overview
+GET   /api/documents
+POST  /api/documents
+POST  /api/documents/generate
+PATCH /api/documents/:documentId/validate
+```
+
+Rapports :
+
+```txt
+GET  /api/reports/summary
+POST /api/reports/export
+```
+
 Users :
 
 ```txt
@@ -847,6 +981,12 @@ Tables principales :
 - `StaffContract`
 - `StaffDocument`
 - `StaffMission`
+- `CommercialClient`
+- `ServiceRequest`
+- `CommercialQuote`
+- `ClientExchange`
+- `BusinessDocument`
+- `ReportExport`
 - `LoginAuditLog`
 
 Actions d'audit principales :
@@ -885,6 +1025,14 @@ STAFF_PROFILE_UPDATED
 STAFF_CONTRACT_CREATED
 STAFF_DOCUMENT_CREATED
 STAFF_MISSION_CREATED
+CLIENT_CREATED
+SERVICE_REQUEST_CREATED
+QUOTE_CREATED
+QUOTE_STATUS_UPDATED
+CLIENT_EXCHANGE_CREATED
+DOCUMENT_CREATED
+DOCUMENT_VALIDATED
+REPORT_EXPORTED
 ```
 
 Statuts utilisateur :
@@ -934,6 +1082,9 @@ Deja en place :
 - audit des modifications entreprise ;
 - audit des actions workflow et notifications ;
 - audit des actions RH : profil, contrat, document et mission ;
+- audit des actions commerciales : client, demande, devis et echange ;
+- audit de creation/validation des documents ;
+- audit des exports de rapports ;
 - notifications in-app persistantes avec lecture/non lecture ;
 - alertes budget et workflow vers les profils concernes ;
 - changement de mot de passe obligatoire apres creation admin ou validation utilisateur.
@@ -971,7 +1122,9 @@ npm run build
 npm run start:dev
 ```
 
-Note : la migration `20260715063000_add_event_management` a ete creee manuellement parce que
+Note : les migrations `20260715063000_add_event_management`,
+`20260716003643_add_workflows_notifications`, `20260716010817_add_hr_module` et
+`20260716023000_add_commercial_documents_reports` ont ete creees manuellement parce que
 Docker/PostgreSQL n'etait pas joignable pendant cette etape. Des que Docker Desktop est ouvert et
 que PostgreSQL repond sur `localhost:5432`, lancer :
 
@@ -1003,6 +1156,7 @@ Les commandes suivantes passent :
 
 ```powershell
 cd D:\PROJETS\Dev\mgroup-app\server
+npx prisma validate
 npm run lint
 npm run build
 
@@ -1037,6 +1191,17 @@ GET http://127.0.0.1:4000/api/workflows
 POST http://127.0.0.1:4000/api/workflows
 GET http://127.0.0.1:4000/api/notifications
 GET http://127.0.0.1:4000/api/notifications/unread-count
+GET http://127.0.0.1:4000/api/hr/overview
+GET http://127.0.0.1:4000/api/commercial/overview
+GET http://127.0.0.1:4000/api/commercial/clients
+POST http://127.0.0.1:4000/api/commercial/clients
+POST http://127.0.0.1:4000/api/commercial/requests
+POST http://127.0.0.1:4000/api/commercial/quotes
+GET http://127.0.0.1:4000/api/documents/overview
+POST http://127.0.0.1:4000/api/documents
+POST http://127.0.0.1:4000/api/documents/generate
+GET http://127.0.0.1:4000/api/reports/summary
+POST http://127.0.0.1:4000/api/reports/export
 GET http://127.0.0.1:4000/api/setup/company
 PATCH http://127.0.0.1:4000/api/setup/company
 GET http://127.0.0.1:5173/
@@ -1044,9 +1209,10 @@ GET http://127.0.0.1:5173/
 
 Les routes `/api/auth/sessions`, `/api/auth/login-history`, `/api/auth/2fa/setup`,
 `/api/auth/2fa/enable`, `/api/auth/2fa/disable`, `/api/events`, `/api/finance/*`,
-`/api/workflows`, `/api/notifications`, `/api/setup/company` et `PATCH /api/setup/company`
+`/api/workflows`, `/api/notifications`, `/api/hr/*`, `/api/commercial/*`, `/api/documents/*`,
+`/api/reports/*`, `/api/setup/company` et `PATCH /api/setup/company`
 demandent une session connectee valide. Les routes entreprise, la configuration 2FA, la
-validation/rejet de budgets, la decision finale des workflows et les rappels evenement sont
+validation/rejet de budgets, la validation documentaire, la decision finale des workflows et les rappels evenement sont
 reserves au role `ADMIN`.
 
 Etat actuel de la base de test au moment de la derniere verification :
@@ -1068,6 +1234,8 @@ Cela signifie que le setup initial a deja ete fait sur la base locale actuelle.
 - Les donnees du profil connecte peuvent etre modifiees depuis `Parametres`.
 - Les parametres Admin gerent maintenant le profil, la securite du compte et l'entreprise.
 - Les sessions actives peuvent etre consultees et revoquees depuis l'interface.
+- Les modules Commercial, Documents et Rapports sont maintenant branches sur Prisma et l'API NestJS.
+- Les exports PDF/Excel et les uploads fichiers sont fonctionnels en prototype, mais doivent etre remplaces par de vrais services de stockage/generation avant production.
 - Les photos sont envoyees en Data URL pour le prototype. En production, il faudra faire un vrai module d'upload.
 - Le dashboard admin lit les demandes `PENDING` depuis PostgreSQL.
 - Les mots de passe ne sont jamais stockes en clair en base.

@@ -356,4 +356,66 @@ export const api = {
       method: 'POST',
       body: payload,
     }),
+  getCommercialOverview: () => request('/commercial/overview'),
+  getCommercialClients: () => request('/commercial/clients'),
+  createCommercialClient: (payload) =>
+    request('/commercial/clients', {
+      method: 'POST',
+      body: payload,
+    }),
+  updateCommercialClient: (clientId, payload) =>
+    request(`/commercial/clients/${clientId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  createServiceRequest: (payload) =>
+    request('/commercial/requests', {
+      method: 'POST',
+      body: payload,
+    }),
+  updateServiceRequest: (requestId, payload) =>
+    request(`/commercial/requests/${requestId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  createCommercialQuote: (payload) =>
+    request('/commercial/quotes', {
+      method: 'POST',
+      body: payload,
+    }),
+  updateCommercialQuote: (quoteId, payload) =>
+    request(`/commercial/quotes/${quoteId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  createClientExchange: (payload) =>
+    request('/commercial/exchanges', {
+      method: 'POST',
+      body: payload,
+    }),
+  getDocumentsOverview: () => request('/documents/overview'),
+  createBusinessDocument: (payload) =>
+    request('/documents', {
+      method: 'POST',
+      body: payload,
+    }),
+  generateBusinessDocument: (payload) =>
+    request('/documents/generate', {
+      method: 'POST',
+      body: payload,
+    }),
+  validateBusinessDocument: (documentId, payload) =>
+    request(`/documents/${documentId}/validate`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  getReportsSummary: (params = {}) => {
+    const query = new URLSearchParams(cleanPayload(params)).toString()
+    return request(`/reports/summary${query ? `?${query}` : ''}`)
+  },
+  exportReport: (payload) =>
+    request('/reports/export', {
+      method: 'POST',
+      body: payload,
+    }),
 }
