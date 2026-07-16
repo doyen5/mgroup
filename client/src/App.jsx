@@ -2,22 +2,31 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   Banknote,
   Bell,
+  Building2,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
   Copy,
   Eye,
   FileText,
+  Gauge,
+  Handshake,
   History,
   Home,
   Layers,
   LogOut,
   Mail,
+  MapPin,
   MessageCircle,
   MonitorCog,
+  ShieldCheck,
+  Sparkles,
   Smartphone,
+  Timer,
+  Trophy,
   UserPlus,
   UserCheck,
   Users,
@@ -35,18 +44,93 @@ const features = [
   {
     title: 'Production evenementielle',
     label: 'Production',
+    icon: Sparkles,
+    metric: 'Concerts, ceremonies, conferences',
     text: 'Organisation complete de concerts, ceremonies, conferences et experiences premium.',
   },
   {
     title: 'Pilotage artistique',
     label: 'Coordination',
+    icon: Users,
+    metric: 'Equipes, invites, partenaires',
     text: 'Coordination des equipes, invites, partenaires et prestataires autour des projets de Molare.',
   },
   {
     title: 'Gestion administrative',
     label: 'Controle',
+    icon: ShieldCheck,
+    metric: 'Budgets, documents, validations',
     text: 'Suivi des documents, budgets, validations, inscriptions et workflows internes de M Group.',
   },
+  {
+    title: 'Relations clients et partenaires',
+    label: 'Commercial',
+    icon: Handshake,
+    metric: 'Prospects, devis, relances',
+    text: 'Suivi clair des demandes de prestations, devis commerciaux et echanges avec les partenaires.',
+  },
+  {
+    title: 'Finances et budgets',
+    label: 'Budget',
+    icon: Banknote,
+    metric: 'Depenses, paiements, alertes',
+    text: 'Lecture rapide des previsions, depenses reelles, paiements et seuils de depassement.',
+  },
+  {
+    title: 'Ressources humaines',
+    label: 'RH',
+    icon: UserCheck,
+    metric: 'Disponibilites, missions, contrats',
+    text: 'Affectation des equipes, suivi des disponibilites et gestion des documents administratifs.',
+  },
+]
+
+// Chiffres de confiance affiches en haut de la landing page.
+const homeStats = [
+  { value: '360°', label: 'Pilotage complet', icon: Gauge },
+  { value: '7', label: 'Modules metier', icon: Layers },
+  { value: '24h', label: 'Alertes et rappels', icon: Timer },
+  { value: 'FCFA', label: 'Budgets suivis', icon: Wallet },
+]
+
+// Methode de travail presentee au public avant l'acces a la plateforme.
+const processSteps = [
+  {
+    title: 'Cadrer',
+    text: 'Identifier le besoin, le lieu, le budget, les prestataires et les responsables.',
+    icon: ClipboardCheck,
+  },
+  {
+    title: 'Planifier',
+    text: 'Construire le planning, la checklist, les documents et les affectations terrain.',
+    icon: CalendarDays,
+  },
+  {
+    title: 'Valider',
+    text: 'Faire passer les budgets, inscriptions et workflows par les bons niveaux de decision.',
+    icon: CheckCircle2,
+  },
+  {
+    title: 'Mesurer',
+    text: "Garder l'historique, les rapports, les depenses et les performances apres evenement.",
+    icon: Activity,
+  },
+]
+
+// Modules internes presentes comme apercu de l'application connectee.
+const platformModules = [
+  { title: 'Evenements', text: 'Planning, production, checklist et pieces jointes.', icon: CalendarDays },
+  { title: 'Finances', text: 'Budgets, paiements, factures, recus et alertes.', icon: Banknote },
+  { title: 'RH', text: 'Personnel, contrats, disponibilites et missions.', icon: Users },
+  { title: 'Commercial', text: 'Clients, prospects, prestations, devis et relances.', icon: Handshake },
+  { title: 'Documents', text: 'Classement par client, evenement ou utilisateur.', icon: FileText },
+  { title: 'Rapports', text: 'CA, budgets consommes, performances et exports.', icon: Trophy },
+]
+
+const trustItems = [
+  { title: 'Acces par role', text: 'Chaque utilisateur voit uniquement les modules utiles a son travail.', icon: ShieldCheck },
+  { title: 'Tracabilite', text: "Les actions sensibles sont conservees dans le journal d'activite.", icon: History },
+  { title: 'Notifications', text: "L'admin est alerte lors des inscriptions, validations et budgets critiques.", icon: Bell },
 ]
 
 // Roles backend disponibles. La valeur est envoyee a Prisma, le label est affiche a l'ecran.
@@ -410,6 +494,95 @@ const requestGoogleCredential = async () => {
 
 const settingsStorageKey = 'mgroup.admin.preferences'
 
+const defaultInterfacePreferences = {
+  theme: 'light',
+  language: 'fr',
+  primaryColor: '#159bd3',
+  accentColor: '#ff8a2a',
+  sidebarStyle: 'dark',
+  density: 'comfortable',
+  dateFormat: 'full',
+  timezone: 'Africa/Abidjan',
+  widgets: {
+    alerts: true,
+    budget: true,
+    clients: true,
+    documents: true,
+    events: true,
+    finance: true,
+    hr: true,
+    reports: true,
+    workflows: true,
+  },
+  navigation: {
+    compactSidebar: false,
+    showIcons: true,
+    stickyHeader: true,
+  },
+}
+
+const normalizeInterfacePreferences = (preferences) => ({
+  ...defaultInterfacePreferences,
+  ...(preferences ?? {}),
+  widgets: {
+    ...defaultInterfacePreferences.widgets,
+    ...(preferences?.widgets ?? {}),
+  },
+  navigation: {
+    ...defaultInterfacePreferences.navigation,
+    ...(preferences?.navigation ?? {}),
+  },
+})
+
+const interfaceLabels = {
+  fr: {
+    alerts: 'Alertes',
+    budget: 'Budget',
+    commercial: 'Commercial',
+    dashboard: 'Vue generale',
+    documents: 'Documents',
+    events: 'Evenements',
+    finance: 'Finances',
+    home: 'Accueil du site',
+    logout: 'Deconnexion',
+    reports: 'Rapports',
+    settings: 'Parametres',
+    sound: 'Alertes',
+    team: 'Equipe / RH',
+    validation: 'Inscriptions',
+    welcome: 'Ravi de vous revoir. Votre espace de pilotage est pret.',
+    workflows: 'Workflows',
+  },
+  en: {
+    alerts: 'Alerts',
+    budget: 'Budget',
+    commercial: 'Sales',
+    dashboard: 'Overview',
+    documents: 'Documents',
+    events: 'Events',
+    finance: 'Finance',
+    home: 'Public site',
+    logout: 'Logout',
+    reports: 'Reports',
+    settings: 'Settings',
+    sound: 'Alerts',
+    team: 'Team / HR',
+    validation: 'Registrations',
+    welcome: 'Welcome back. Your workspace is ready.',
+    workflows: 'Workflows',
+  },
+}
+
+const interfaceText = (preferences, key) =>
+  interfaceLabels[preferences.language]?.[key] ?? interfaceLabels.fr[key] ?? key
+
+const formatDashboardDateTime = (date, preferences = defaultInterfacePreferences) =>
+  new Intl.DateTimeFormat(preferences.language === 'en' ? 'en-US' : 'fr-FR', {
+    dateStyle: preferences.dateFormat === 'short' ? 'short' : 'full',
+    timeStyle: 'medium',
+    timeZone: preferences.timezone,
+  }).format(date)
+
 const defaultAdminSettings = {
   display: {
     theme: 'light',
@@ -502,6 +675,7 @@ const auditActionLabel = (action) =>
     USER_PASSWORD_RESET: 'Mot de passe reinitialise',
     ROLE_CHANGED: 'Role modifie',
     COMPANY_UPDATED: 'Entreprise modifiee',
+    INTERFACE_PREFERENCES_UPDATED: 'Preferences interface modifiees',
     USER_REGISTERED: 'Inscription demandee',
     SETUP_COMPLETED: 'Configuration initiale',
   })[action] ?? action
@@ -533,6 +707,7 @@ const toDashboardUser = (user) => {
     ...user,
     fullName: `${lastName} ${firstName}`.trim() || user?.email || 'Utilisateur M Group',
     initials,
+    interfacePreference: normalizeInterfacePreferences(user?.interfacePreference),
     role: roleLabel,
     roleValues,
   }
@@ -550,8 +725,21 @@ function App() {
   const [twoFactorChallenge, setTwoFactorChallenge] = useState(null)
   const [isAuthBusy, setIsAuthBusy] = useState(false)
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false)
+  const [interfacePreferences, setInterfacePreferences] = useState(defaultInterfacePreferences)
   const [lastLoginAt, setLastLoginAt] = useState(null)
   const [showLoginToast, setShowLoginToast] = useState(false)
+
+  const buildDashboardUser = useCallback(async (profile) => {
+    try {
+      const preferences = await api.getInterfacePreferences()
+      return toDashboardUser({
+        ...profile,
+        interfacePreference: preferences,
+      })
+    } catch {
+      return toDashboardUser(profile)
+    }
+  }, [])
 
   // Au lancement, le frontend verifie le setup puis restaure la session si un cookie valide existe.
   useEffect(() => {
@@ -604,7 +792,9 @@ function App() {
             return
           }
 
-          setActiveUser(toDashboardUser(profile))
+          const dashboardUser = await buildDashboardUser(profile)
+          setActiveUser(dashboardUser)
+          setInterfacePreferences(dashboardUser.interfacePreference)
           setLastLoginAt(profile.lastLoginAt ? new Date(profile.lastLoginAt) : null)
 
           if (profile.status === 'FORCE_PASSWORD_CHANGE') {
@@ -637,7 +827,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [buildDashboardUser])
 
   // Le message de derniere connexion disparait automatiquement apres 5 secondes.
   useEffect(() => {
@@ -694,7 +884,7 @@ function App() {
     showView('auth')
   }
 
-  const handleAuthenticatedResult = (result) => {
+  const handleAuthenticatedResult = async (result) => {
     // Tous les flux d'auth reutilisent cette sortie : mot de passe, Google, telephone et 2FA.
     if (result.requiresApproval) {
       showView('pendingApproval')
@@ -711,9 +901,10 @@ function App() {
       return
     }
 
-    const dashboardUser = toDashboardUser(result.user)
+    const dashboardUser = await buildDashboardUser(result.user)
 
     setActiveUser(dashboardUser)
+    setInterfacePreferences(dashboardUser.interfacePreference)
     setLastLoginAt(result.user?.lastLoginAt ? new Date(result.user.lastLoginAt) : new Date())
     setShowLoginToast(true)
 
@@ -738,7 +929,7 @@ function App() {
     try {
       const idToken = await requestGoogleCredential()
       const result = await api.googleLogin({ idToken })
-      handleAuthenticatedResult(result)
+      await handleAuthenticatedResult(result)
     } catch (error) {
       setAuthNotice(error.message)
     } finally {
@@ -767,7 +958,7 @@ function App() {
         window.localStorage.removeItem('mgroup.rememberedEmail')
       }
 
-      handleAuthenticatedResult(result)
+      await handleAuthenticatedResult(result)
     } catch (error) {
       setAuthNotice(error.message)
     } finally {
@@ -794,7 +985,7 @@ function App() {
         rememberMe: formData.get('rememberMe') === 'on',
       })
       setTwoFactorChallenge(null)
-      handleAuthenticatedResult(result)
+      await handleAuthenticatedResult(result)
     } catch (error) {
       setPasswordNotice(error.message)
     } finally {
@@ -836,8 +1027,10 @@ function App() {
         newPassword,
       })
       const profile = await api.getUserProfile()
+      const dashboardUser = await buildDashboardUser(profile)
 
-      setActiveUser(toDashboardUser(profile))
+      setActiveUser(dashboardUser)
+      setInterfacePreferences(dashboardUser.interfacePreference)
       showView('dashboard')
     } catch (error) {
       setPasswordNotice(error.message)
@@ -848,10 +1041,27 @@ function App() {
 
   const handleProfileUpdate = async (payload) => {
     const updated = await api.updateUserProfile(payload)
-    const dashboardUser = toDashboardUser(updated)
+    const dashboardUser = toDashboardUser({
+      ...updated,
+      interfacePreference: interfacePreferences,
+    })
 
     setActiveUser(dashboardUser)
     return dashboardUser
+  }
+
+  const handleInterfacePreferencesUpdate = async (payload) => {
+    const updatedPreferences = normalizeInterfacePreferences(await api.updateInterfacePreferences(payload))
+    setInterfacePreferences(updatedPreferences)
+    setActiveUser((current) =>
+      current
+        ? {
+            ...current,
+            interfacePreference: updatedPreferences,
+          }
+        : current,
+    )
+    return updatedPreferences
   }
 
   const handleCompanyUpdate = async (payload) => {
@@ -870,6 +1080,7 @@ function App() {
     }
 
     setActiveUser(null)
+    setInterfacePreferences(defaultInterfacePreferences)
     goLogin('Vous avez ete deconnecte. Reconnectez-vous pour acceder a votre espace.')
   }
 
@@ -937,8 +1148,10 @@ function App() {
           lastLoginAt={lastLoginAt}
           onCompanyUpdate={handleCompanyUpdate}
           onGoHome={goHome}
+          onInterfacePreferencesUpdate={handleInterfacePreferencesUpdate}
           onProfileUpdate={handleProfileUpdate}
           onRequestLogout={() => setIsLogoutConfirmOpen(true)}
+          preferences={interfacePreferences}
           user={activeUser}
         />
       )}
@@ -1019,6 +1232,12 @@ function HomeView({ onOpenAuth }) {
             <span className="brand-mark">M</span>
             <span>M Group</span>
           </a>
+          <nav className="home-nav" aria-label="Navigation accueil">
+            <a href="#apropos">A propos</a>
+            <a href="#prestations">Prestations</a>
+            <a href="#methode">Methode</a>
+            <a href="#plateforme">Plateforme</a>
+          </nav>
           <div className="nav-actions">
             <button type="button" className="primary-button" onClick={onOpenAuth}>
               Mon Espace
@@ -1041,12 +1260,29 @@ function HomeView({ onOpenAuth }) {
               Voir nos prestations
             </a>
           </div>
+          <div className="hero-stat-strip" aria-label="Indicateurs M Group">
+            {homeStats.map((stat) => {
+              const Icon = stat.icon
+
+              return (
+                <article key={stat.label}>
+                  <Icon size={20} aria-hidden="true" />
+                  <strong>{stat.value}</strong>
+                  <span>{stat.label}</span>
+                </article>
+              )
+            })}
+          </div>
         </div>
       </section>
 
       <section id="apropos" className="about-section">
-        <div className="about-media">
+        <div className="about-media enhanced-media">
           <img src={heroImage} alt="Equipe M Group en preparation evenementielle" />
+          <div className="media-badge">
+            <Sparkles size={18} aria-hidden="true" />
+            <span>Experience premium</span>
+          </div>
         </div>
         <div className="about-content">
           <p className="eyebrow">A Propos</p>
@@ -1059,6 +1295,43 @@ function HomeView({ onOpenAuth }) {
             L'objectif est simple : mieux organiser les prestations, securiser les acces, suivre les
             budgets et garder une memoire fiable de chaque evenement.
           </p>
+          <div className="about-proof-grid" aria-label="Forces operationnelles">
+            {trustItems.map((item) => {
+              const Icon = item.icon
+
+              return (
+                <article key={item.title}>
+                  <Icon size={19} aria-hidden="true" />
+                  <strong>{item.title}</strong>
+                  <span>{item.text}</span>
+                </article>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="experience-band" aria-label="Experience evenementielle">
+        <div>
+          <p className="eyebrow">Direction operationnelle</p>
+          <h2>Une organisation lisible avant, pendant et apres chaque projet.</h2>
+        </div>
+        <div className="experience-grid">
+          <article>
+            <Building2 size={24} aria-hidden="true" />
+            <strong>Coordination centrale</strong>
+            <span>Un point de pilotage pour les equipes, prestataires et validations.</span>
+          </article>
+          <article>
+            <MapPin size={24} aria-hidden="true" />
+            <strong>Suivi terrain</strong>
+            <span>Planning, lieux, responsables et checklist consultables rapidement.</span>
+          </article>
+          <article>
+            <MonitorCog size={24} aria-hidden="true" />
+            <strong>Tableaux de bord</strong>
+            <span>Des vues differentes pour Admin, RH, Commercial, Comptable et futurs profils.</span>
+          </article>
         </div>
       </section>
 
@@ -1079,8 +1352,10 @@ function HomeView({ onOpenAuth }) {
                 <img src={heroImage} alt="" />
               </div>
               <div className="feature-body">
+                <feature.icon size={24} aria-hidden="true" />
                 <span>{feature.label}</span>
                 <h3>{feature.title}</h3>
+                <strong>{feature.metric}</strong>
                 <p>{feature.text}</p>
               </div>
             </article>
@@ -1088,20 +1363,109 @@ function HomeView({ onOpenAuth }) {
         </div>
       </section>
 
-      <section id="organisation" className="split-section">
+      <section id="methode" className="process-section">
+        <div className="section-heading left">
+          <p className="eyebrow">Methode M Group</p>
+          <h2>Un cycle de production clair, du brief au rapport final.</h2>
+          <p>
+            Chaque action importante est preparee, attribuee, validee puis historisee pour garder
+            un niveau d'execution professionnel.
+          </p>
+        </div>
+        <div className="process-grid">
+          {processSteps.map((step, index) => {
+            const Icon = step.icon
+
+            return (
+              <article key={step.title}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <Icon size={26} aria-hidden="true" />
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+
+      <section id="plateforme" className="platform-section">
+        <div className="platform-copy">
+          <p className="eyebrow">Plateforme interne</p>
+          <h2>Des modules adaptes a chaque metier.</h2>
+          <p>
+            L'application est pensee pour que chaque profil travaille vite : l'Admin controle,
+            la RH affecte, le Commercial suit les clients, le Comptable pilote les budgets.
+          </p>
+          <button type="button" className="primary-button large" onClick={onOpenAuth}>
+            Acceder a Mon Espace
+            <ArrowRight size={18} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="platform-module-grid">
+          {platformModules.map((module) => {
+            const Icon = module.icon
+
+            return (
+              <article key={module.title}>
+                <Icon size={22} aria-hidden="true" />
+                <strong>{module.title}</strong>
+                <span>{module.text}</span>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="gallery-section" aria-label="Moments evenementiels">
+        <article className="gallery-large">
+          <img src={heroImage} alt="Scene evenementielle M Group" />
+        </article>
+        <article className="gallery-copy">
+          <p className="eyebrow">Experience terrain</p>
+          <h2>Le bon niveau d'information au bon moment.</h2>
+          <p>
+            Preparation technique, validation budgetaire, coordination artistique, suivi client et
+            reporting : tout est rassemble pour reduire les oublis et accelerer les decisions.
+          </p>
+          <a className="secondary-button bordered large" href="#contact">
+            Nous contacter
+          </a>
+        </article>
+      </section>
+
+      <section id="contact" className="split-section access-section">
         <div>
           <p className="eyebrow">Acces securise</p>
           <h2>Connexion, inscription et droits adaptes.</h2>
         </div>
-        <p>
-          Les nouveaux utilisateurs peuvent demander un compte, mais seul l'administrateur attribue
-          un role et confirme l'inscription.
-        </p>
+        <div className="access-actions">
+          <p>
+            Les nouveaux utilisateurs peuvent demander un compte, mais seul l'administrateur
+            attribue un role et confirme l'inscription.
+          </p>
+          <button type="button" className="primary-button large" onClick={onOpenAuth}>
+            Ouvrir Mon Espace
+          </button>
+        </div>
       </section>
 
       <footer className="footer">
-        <span>Copyright © 2026 mgroup</span>
-        <span>Desire Kouame AHOU CONCEPTION</span>
+        <div className="footer-brand-block">
+          <strong>M Group</strong>
+          <span>Gestion evenementielle, production, coordination et pilotage interne.</span>
+        </div>
+        <div className="footer-links">
+          <a href="#apropos">A propos</a>
+          <a href="#prestations">Prestations</a>
+          <a href="#plateforme">Plateforme</a>
+          <button type="button" onClick={onOpenAuth}>
+            Mon Espace
+          </button>
+        </div>
+        <div className="footer-bottom">
+          <span>Copyright © 2026 mgroup</span>
+          <span>Desire Kouame AHOU CONCEPTION</span>
+        </div>
       </footer>
     </>
   )
@@ -1915,8 +2279,10 @@ function DashboardView({
   lastLoginAt,
   onCompanyUpdate,
   onGoHome,
+  onInterfacePreferencesUpdate,
   onProfileUpdate,
   onRequestLogout,
+  preferences,
   user,
 }) {
   const [now, setNow] = useState(() => new Date())
@@ -1941,8 +2307,24 @@ function DashboardView({
   const previousNotificationCountRef = useRef(0)
   const roleKey = useMemo(() => user.roleValues.join('|'), [user.roleValues])
   const isAdmin = user.roleValues.includes('ADMIN')
+  const activePreferences = normalizeInterfacePreferences(preferences ?? user.interfacePreference)
   const panelIds = useMemo(() => getDashboardPanelIds(user.roleValues), [user.roleValues])
   const activePanelId = panelIds.includes(activePanel) ? activePanel : panelIds[0]
+  const dashboardStyle = {
+    '--primary-color': activePreferences.primaryColor,
+    '--accent-color': activePreferences.accentColor,
+  }
+  const dashboardClassName = [
+    'admin-layout',
+    `dashboard-theme-${activePreferences.theme}`,
+    `dashboard-density-${activePreferences.density}`,
+    `dashboard-sidebar-${activePreferences.sidebarStyle}`,
+    activePreferences.navigation.compactSidebar ? 'dashboard-sidebar-compact' : '',
+    activePreferences.navigation.showIcons ? '' : 'dashboard-icons-hidden',
+    activePreferences.navigation.stickyHeader ? 'dashboard-sticky-header' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
   const dashboardIdentity = useMemo(() => {
     if (isAdmin) {
       return {
@@ -2160,7 +2542,7 @@ function DashboardView({
   }
 
   return (
-    <section className="admin-layout" aria-label={dashboardIdentity.ariaLabel}>
+    <section className={dashboardClassName} style={dashboardStyle} aria-label={dashboardIdentity.ariaLabel}>
       {/* Sidebar dashboard : navigation principale toujours visible a gauche. */}
       <aside className="admin-sidebar" aria-label="Menu dashboard">
         <div className="sidebar-logo">
@@ -2183,13 +2565,13 @@ function DashboardView({
                 onClick={() => setActivePanel(panelId)}
               >
                 <Icon size={17} aria-hidden="true" />
-                {panel.label}
+                <span>{interfaceText(activePreferences, panelId) ?? panel.label}</span>
               </button>
             )
           })}
           <button type="button" onClick={onRequestLogout}>
             <LogOut size={17} aria-hidden="true" />
-            Deconnexion
+            <span>{interfaceText(activePreferences, 'logout')}</span>
           </button>
         </nav>
       </aside>
@@ -2212,15 +2594,15 @@ function DashboardView({
               onClick={toggleSound}
             >
               {soundEnabled ? <Volume2 size={17} /> : <VolumeX size={17} />}
-              Alertes
+              {interfaceText(activePreferences, 'sound')}
             </button>
             <button type="button" className="secondary-button bordered" onClick={onGoHome}>
               <Home size={17} aria-hidden="true" />
-              Accueil du site
+              {interfaceText(activePreferences, 'home')}
             </button>
             <button type="button" className="danger-button" onClick={onRequestLogout}>
               <LogOut size={17} aria-hidden="true" />
-              Deconnexion
+              {interfaceText(activePreferences, 'logout')}
             </button>
           </div>
         </header>
@@ -2233,10 +2615,12 @@ function DashboardView({
             <p className="eyebrow">Bienvenue</p>
             <h2>{user.fullName}</h2>
             <span className="role-badge">{user.role}</span>
-            <p className="welcome-message">Ravi de vous revoir. Votre espace de pilotage est pret.</p>
+            <p className="welcome-message">{interfaceText(activePreferences, 'welcome')}</p>
           </div>
           {lastLoginAt && (
-            <p className="last-login-inline">Derniere connexion : {formatDateTime(lastLoginAt)}</p>
+            <p className="last-login-inline">
+              Derniere connexion : {formatDashboardDateTime(lastLoginAt, activePreferences)}
+            </p>
           )}
         </section>
 
@@ -2245,8 +2629,10 @@ function DashboardView({
             user={user}
             onAdminEvent={playAdminSound}
             onCompanyUpdate={onCompanyUpdate}
+            onInterfacePreferencesUpdate={onInterfacePreferencesUpdate}
             onProfileUpdate={onProfileUpdate}
             onRequestLogout={onRequestLogout}
+            preferences={activePreferences}
           />
         ) : activePanelId === 'validation' ? (
           <ValidationPage
@@ -2292,6 +2678,7 @@ function DashboardView({
             notificationCount={notificationCount}
             onOpenPanel={setActivePanel}
             pendingUsers={pendingUsers}
+            preferences={activePreferences}
             user={user}
           />
         )}
@@ -2330,6 +2717,7 @@ function RoleOverviewPage({
   notificationCount,
   onOpenPanel,
   pendingUsers,
+  preferences,
   user,
 }) {
   const [overview, setOverview] = useState({
@@ -2343,6 +2731,7 @@ function RoleOverviewPage({
   })
   const [notice, setNotice] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const visibleWidgets = normalizeInterfacePreferences(preferences).widgets
   const isRh = user.roleValues.includes('RH')
   const isCommercial = user.roleValues.includes('COMMERCIAL')
   const canCommercial = isAdmin || user.roleValues.includes('COMMERCIAL') || user.roleValues.includes('COMPTABLE')
@@ -2415,79 +2804,86 @@ function RoleOverviewPage({
           description="Suivez les disponibilites, dossiers du personnel, affectations et workflows RH depuis une vue claire."
         />
         {notice && <p className="auth-notice">{notice}</p>}
-        <OverviewKpis
-          cards={[
-            { label: 'Personnel actif', value: overview.hr?.totals.personnel ?? 0, icon: Users, tone: 'blue' },
-            { label: 'Disponibles', value: overview.hr?.totals.available ?? 0, icon: UserCheck, tone: 'cyan' },
+      <OverviewKpis
+        cards={[
+            { label: 'Personnel actif', value: overview.hr?.totals.personnel ?? 0, icon: Users, tone: 'blue', visible: visibleWidgets.hr },
+            { label: 'Disponibles', value: overview.hr?.totals.available ?? 0, icon: UserCheck, tone: 'cyan', visible: visibleWidgets.hr },
             {
               label: 'Workflows RH',
               value: pendingRhWorkflows.length,
               icon: Layers,
               tone: 'yellow',
+              visible: visibleWidgets.workflows,
             },
-            { label: 'Alertes', value: notificationCount, icon: Bell, tone: 'coral' },
+            { label: 'Alertes', value: notificationCount, icon: Bell, tone: 'coral', visible: visibleWidgets.alerts },
           ]}
         />
         <section className="role-action-grid" aria-label="Actions rapides RH">
           <RoleActionCard
             icon={Users}
+            visible={visibleWidgets.hr}
             title="Dossiers du personnel"
             text="Disponibilites, contrats, documents administratifs et missions."
             onClick={() => onOpenPanel('team')}
           />
           <RoleActionCard
             icon={Layers}
+            visible={visibleWidgets.workflows}
             title="Affectations a traiter"
             text={`${pendingRhWorkflows.length} demande(s) attendent une affectation RH.`}
             onClick={() => onOpenPanel('workflows')}
           />
           <RoleActionCard
             icon={CalendarDays}
+            visible={visibleWidgets.events}
             title="Evenements"
             text={`${overview.events.length} evenement(s) visibles pour organiser les equipes.`}
             onClick={() => onOpenPanel('events')}
           />
           <RoleActionCard
             icon={FileText}
+            visible={visibleWidgets.documents}
             title="Documents RH"
             text={`${overview.documents?.totals.pendingValidation ?? 0} document(s) attendent une validation.`}
             onClick={() => onOpenPanel('documents')}
           />
         </section>
-        <section className="analytics-grid" aria-label="Synthese RH">
-          <article className="chart-panel wide">
-            <div className="panel-heading">
-              <strong>Disponibilite du personnel</strong>
-              <span>{isLoading ? 'Chargement...' : 'Vue temps reel'}</span>
-            </div>
-            <div className="availability-strip" aria-hidden="true">
-              {(overview.hr?.staff ?? []).slice(0, 10).map((staff) => (
-                <span
-                  className={(staff.profile?.availability ?? 'AVAILABLE').toLowerCase()}
-                  key={staff.id}
-                  title={userDisplayName(staff)}
-                ></span>
-              ))}
-            </div>
-            <ul className="compact-list">
-              {(overview.hr?.staff ?? []).slice(0, 5).map((staff) => (
-                <li key={staff.id}>
-                  <span>{userDisplayName(staff)}</span>
-                  <strong>{staffAvailabilityLabel(staff.profile?.availability ?? 'AVAILABLE')}</strong>
-                </li>
-              ))}
-              {!overview.hr?.staff?.length && <li>Aucun personnel charge.</li>}
-            </ul>
-          </article>
-          <article className="chart-panel compact">
-            <div className="panel-heading">
-              <strong>Missions</strong>
-              <span>A venir</span>
-            </div>
-            <div className="donut-chart rh" aria-hidden="true"></div>
-            <strong className="overview-big-number">{overview.hr?.totals.missionsUpcoming ?? 0}</strong>
-          </article>
-        </section>
+        {visibleWidgets.hr && (
+          <section className="analytics-grid" aria-label="Synthese RH">
+            <article className="chart-panel wide">
+              <div className="panel-heading">
+                <strong>Disponibilite du personnel</strong>
+                <span>{isLoading ? 'Chargement...' : 'Vue temps reel'}</span>
+              </div>
+              <div className="availability-strip" aria-hidden="true">
+                {(overview.hr?.staff ?? []).slice(0, 10).map((staff) => (
+                  <span
+                    className={(staff.profile?.availability ?? 'AVAILABLE').toLowerCase()}
+                    key={staff.id}
+                    title={userDisplayName(staff)}
+                  ></span>
+                ))}
+              </div>
+              <ul className="compact-list">
+                {(overview.hr?.staff ?? []).slice(0, 5).map((staff) => (
+                  <li key={staff.id}>
+                    <span>{userDisplayName(staff)}</span>
+                    <strong>{staffAvailabilityLabel(staff.profile?.availability ?? 'AVAILABLE')}</strong>
+                  </li>
+                ))}
+                {!overview.hr?.staff?.length && <li>Aucun personnel charge.</li>}
+              </ul>
+            </article>
+            <article className="chart-panel compact">
+              <div className="panel-heading">
+                <strong>Missions</strong>
+                <span>A venir</span>
+              </div>
+              <div className="donut-chart rh" aria-hidden="true"></div>
+              <strong className="overview-big-number">{overview.hr?.totals.missionsUpcoming ?? 0}</strong>
+            </article>
+          </section>
+        )}
       </section>
     )
   }
@@ -2501,69 +2897,79 @@ function RoleOverviewPage({
           description="Pilotez vos prospects, demandes de prestations, devis et relances commerciales sans les outils reserves a l'Admin."
         />
         {notice && <p className="auth-notice">{notice}</p>}
-        <OverviewKpis
-          cards={[
-            { label: 'Clients', value: overview.commercial?.totals.clients ?? 0, icon: Users, tone: 'blue' },
-            { label: 'Prospects ouverts', value: overview.commercial?.totals.prospects ?? 0, icon: UserPlus, tone: 'cyan' },
+      <OverviewKpis
+        cards={[
+            { label: 'Clients', value: overview.commercial?.totals.clients ?? 0, icon: Users, tone: 'blue', visible: visibleWidgets.clients },
+            { label: 'Prospects ouverts', value: overview.commercial?.totals.prospects ?? 0, icon: UserPlus, tone: 'cyan', visible: visibleWidgets.clients },
             {
               label: 'Demandes actives',
               value: overview.commercial?.totals.openRequests ?? 0,
               icon: ClipboardCheck,
               tone: 'yellow',
+              visible: visibleWidgets.workflows,
             },
             {
               label: 'CA gagne',
               value: formatFcfa(overview.commercial?.totals.revenueFcfa ?? 0),
               icon: Wallet,
               tone: 'coral',
+              visible: visibleWidgets.reports,
             },
           ]}
         />
 
-        <section className="analytics-grid" aria-label="Pilotage commercial">
-          <article className="chart-panel wide">
-            <div className="panel-heading">
-              <strong>Pipeline commercial</strong>
-              <span>{isLoading ? 'Chargement...' : `${overview.commercial?.totals.prospects ?? 0} prospect(s)`}</span>
-            </div>
-            <div className="report-bars commercial-pipeline-bars">
-              {commercialPipeline.map((stage) => (
-                <article key={stage.status}>
-                  <span>{commercialStatusLabel(stage.status)}</span>
-                  <div>
-                    <i style={{ '--bar-width': `${Math.max((stage.count / maxPipelineCount) * 100, 8)}%` }}></i>
-                  </div>
-                  <strong>{stage.count}</strong>
-                  <small>{stage.status}</small>
-                </article>
-              ))}
-              {commercialPipeline.length === 0 && <p>Aucun pipeline charge.</p>}
-            </div>
-          </article>
-          <article className="chart-panel compact">
-            <div className="panel-heading">
-              <strong>Devis</strong>
-              <span>Performance</span>
-            </div>
-            <div className="donut-chart commercial" aria-hidden="true"></div>
-            <ul className="compact-list">
-              <li>
-                <span>Acceptes</span>
-                <strong>{overview.commercial?.totals.acceptedQuotes ?? 0}</strong>
-              </li>
-              <li>
-                <span>En cours</span>
-                <strong>{pendingQuotes.length}</strong>
-              </li>
-              <li>
-                <span>Alertes</span>
-                <strong>{notificationCount}</strong>
-              </li>
-            </ul>
-          </article>
-        </section>
+        {(visibleWidgets.clients || visibleWidgets.reports) && (
+          <section className="analytics-grid" aria-label="Pilotage commercial">
+            {visibleWidgets.clients && (
+              <article className="chart-panel wide">
+                <div className="panel-heading">
+                  <strong>Pipeline commercial</strong>
+                  <span>
+                    {isLoading ? 'Chargement...' : `${overview.commercial?.totals.prospects ?? 0} prospect(s)`}
+                  </span>
+                </div>
+                <div className="report-bars commercial-pipeline-bars">
+                  {commercialPipeline.map((stage) => (
+                    <article key={stage.status}>
+                      <span>{commercialStatusLabel(stage.status)}</span>
+                      <div>
+                        <i style={{ '--bar-width': `${Math.max((stage.count / maxPipelineCount) * 100, 8)}%` }}></i>
+                      </div>
+                      <strong>{stage.count}</strong>
+                      <small>{stage.status}</small>
+                    </article>
+                  ))}
+                  {commercialPipeline.length === 0 && <p>Aucun pipeline charge.</p>}
+                </div>
+              </article>
+            )}
+            {visibleWidgets.reports && (
+              <article className="chart-panel compact">
+                <div className="panel-heading">
+                  <strong>Devis</strong>
+                  <span>Performance</span>
+                </div>
+                <div className="donut-chart commercial" aria-hidden="true"></div>
+                <ul className="compact-list">
+                  <li>
+                    <span>Acceptes</span>
+                    <strong>{overview.commercial?.totals.acceptedQuotes ?? 0}</strong>
+                  </li>
+                  <li>
+                    <span>En cours</span>
+                    <strong>{pendingQuotes.length}</strong>
+                  </li>
+                  <li>
+                    <span>Alertes</span>
+                    <strong>{notificationCount}</strong>
+                  </li>
+                </ul>
+              </article>
+            )}
+          </section>
+        )}
 
-        <section className="business-dashboard-grid" aria-label="Suivi commercial recent">
+        {visibleWidgets.clients && <section className="business-dashboard-grid" aria-label="Suivi commercial recent">
           <article className="settings-card">
             <div className="settings-panel-heading">
               <div>
@@ -2598,41 +3004,47 @@ function RoleOverviewPage({
               {!overview.commercial?.quotes?.length && <li>Aucun devis commercial.</li>}
             </ul>
           </article>
-        </section>
+        </section>}
 
         <section className="role-action-grid" aria-label="Actions rapides Commercial">
           <RoleActionCard
             icon={UserPlus}
+            visible={visibleWidgets.clients}
             title="Ajouter un client"
             text="Creez un prospect, renseignez ses contacts et suivez son statut commercial."
             onClick={() => onOpenPanel('commercial')}
           />
           <RoleActionCard
             icon={ClipboardCheck}
+            visible={visibleWidgets.clients}
             title="Creer une prestation"
             text={`${overview.commercial?.totals.openRequests ?? 0} demande(s) active(s) dans le pipeline.`}
             onClick={() => onOpenPanel('commercial')}
           />
           <RoleActionCard
             icon={Layers}
+            visible={visibleWidgets.workflows}
             title="Suivre les workflows"
             text={`${activeCommercialWorkflows.length} workflow(s) en cours de budget, RH ou validation.`}
             onClick={() => onOpenPanel('workflows')}
           />
           <RoleActionCard
             icon={FileText}
+            visible={visibleWidgets.documents}
             title="Documents commerciaux"
             text={`${overview.documents?.totals.documents ?? 0} document(s), devis, contrats ou factures classes.`}
             onClick={() => onOpenPanel('documents')}
           />
           <RoleActionCard
             icon={Activity}
+            visible={visibleWidgets.reports}
             title="Rapports"
             text={`${overview.reports?.commercialPerformance.acceptedQuotes ?? 0} devis accepte(s) sur la periode.`}
             onClick={() => onOpenPanel('reports')}
           />
           <RoleActionCard
             icon={Bell}
+            visible={visibleWidgets.alerts}
             title="Alertes"
             text={`${notificationCount} notification(s) a consulter pour vos actions commerciales.`}
             onClick={() => onOpenPanel('alerts')}
@@ -2652,13 +3064,14 @@ function RoleOverviewPage({
       {(notice || dashboardError) && <p className="auth-notice">{notice || dashboardError}</p>}
       <OverviewKpis
         cards={[
-          { label: 'Inscriptions', value: pendingUsers.length, icon: UserPlus, tone: 'blue' },
-          { label: 'Evenements', value: overview.events.length, icon: CalendarDays, tone: 'cyan' },
-          { label: 'Budgets en alerte', value: overview.finance?.alerts.length ?? 0, icon: Banknote, tone: 'yellow' },
-          { label: 'Alertes', value: notificationCount, icon: Bell, tone: 'coral' },
+          { label: 'Inscriptions', value: pendingUsers.length, icon: UserPlus, tone: 'blue', visible: true },
+          { label: 'Evenements', value: overview.events.length, icon: CalendarDays, tone: 'cyan', visible: visibleWidgets.events },
+          { label: 'Budgets en alerte', value: overview.finance?.alerts.length ?? 0, icon: Banknote, tone: 'yellow', visible: visibleWidgets.budget },
+          { label: 'Alertes', value: notificationCount, icon: Bell, tone: 'coral', visible: visibleWidgets.alerts },
         ]}
       />
-      <section className="analytics-grid" aria-label="Pilotage admin">
+      {(visibleWidgets.events || visibleWidgets.budget) && <section className="analytics-grid" aria-label="Pilotage admin">
+        {visibleWidgets.events && (
         <article className="chart-panel wide">
           <div className="panel-heading">
             <strong>Activite evenementielle</strong>
@@ -2670,6 +3083,8 @@ function RoleOverviewPage({
             ))}
           </div>
         </article>
+        )}
+        {visibleWidgets.budget && (
         <article className="chart-panel compact">
           <div className="panel-heading">
             <strong>Budget global</strong>
@@ -2680,22 +3095,26 @@ function RoleOverviewPage({
             {formatFcfa(overview.finance?.totals.approvedBudgetFcfa ?? 0)}
           </strong>
         </article>
-      </section>
+        )}
+      </section>}
       <section className="role-action-grid" aria-label="Actions rapides Admin">
         <RoleActionCard
           icon={ClipboardCheck}
+          visible
           title="Valider les inscriptions"
           text={`${pendingUsers.length} demande(s) attendent une decision Admin.`}
           onClick={() => onOpenPanel('validation')}
         />
         <RoleActionCard
           icon={Layers}
+          visible={visibleWidgets.workflows}
           title="Decisions workflow"
           text={`${pendingAdminWorkflows.length} workflow(s) attendent validation ou refus.`}
           onClick={() => onOpenPanel('workflows')}
         />
         <RoleActionCard
           icon={UserPlus}
+          visible={visibleWidgets.clients}
           title="Pipeline commercial"
           text={`${overview.commercial?.totals.prospects ?? 0} prospect(s), ${formatFcfa(
             overview.commercial?.totals.revenueFcfa ?? 0,
@@ -2704,18 +3123,21 @@ function RoleOverviewPage({
         />
         <RoleActionCard
           icon={Wallet}
+          visible={visibleWidgets.finance}
           title="Controle financier"
           text={`${formatFcfa(overview.finance?.totals.pendingPaymentsFcfa ?? 0)} en paiements a suivre.`}
           onClick={() => onOpenPanel('finance')}
         />
         <RoleActionCard
           icon={Users}
+          visible={visibleWidgets.hr}
           title="Equipe et RH"
           text={`${overview.hr?.totals.personnel ?? 0} profil(s) actifs dans le personnel.`}
           onClick={() => onOpenPanel('team')}
         />
         <RoleActionCard
           icon={FileText}
+          visible={visibleWidgets.documents || visibleWidgets.reports}
           title="Documents et rapports"
           text={`${overview.documents?.totals.pendingValidation ?? 0} validation(s), ${
             overview.reports?.totals.completedEvents ?? 0
@@ -2740,7 +3162,7 @@ function OverviewHero({ description, eyebrow, title }) {
 function OverviewKpis({ cards }) {
   return (
     <div className="insight-grid role-kpi-grid">
-      {cards.map((card) => {
+      {cards.filter((card) => card.visible !== false).map((card) => {
         const Icon = card.icon
 
         return (
@@ -2757,7 +3179,11 @@ function OverviewKpis({ cards }) {
   )
 }
 
-function RoleActionCard({ icon: Icon, onClick, text, title }) {
+function RoleActionCard({ icon: Icon, onClick, text, title, visible = true }) {
+  if (!visible) {
+    return null
+  }
+
   return (
     <button type="button" className="role-action-card" onClick={onClick}>
       <span>
@@ -6318,7 +6744,15 @@ function RegistrationReviewModal({ onClose, user }) {
   )
 }
 
-function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onRequestLogout, user }) {
+function SettingsPanel({
+  onAdminEvent,
+  onCompanyUpdate,
+  onInterfacePreferencesUpdate,
+  onProfileUpdate,
+  onRequestLogout,
+  preferences,
+  user,
+}) {
   const [activeTab, setActiveTab] = useState('profile')
   const [notice, setNotice] = useState({ type: '', text: '' })
   const [savingTarget, setSavingTarget] = useState('')
@@ -6339,6 +6773,7 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
   const [adminSettings, setAdminSettings] = useState(() => readAdminSettings())
   const [isAdminDataLoading, setIsAdminDataLoading] = useState(false)
   const isAdmin = user.roleValues.includes('ADMIN')
+  const interfaceSettings = normalizeInterfacePreferences(preferences)
 
   useEffect(() => {
     if (activeTab !== 'security') {
@@ -6470,32 +6905,46 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
     onAdminEvent?.(message)
   }
 
+  const persistInterfaceSettings = async (payload, message) => {
+    setSavingTarget('interface')
+    showNotice('', '')
+
+    try {
+      const updatedPreferences = await onInterfacePreferencesUpdate(payload)
+      showNotice('success', message)
+      onAdminEvent?.(message)
+      return updatedPreferences
+    } catch (error) {
+      showNotice('error', error.message)
+      return null
+    } finally {
+      setSavingTarget('')
+    }
+  }
+
   const updateDisplayPreference = (field, value) => {
-    persistAdminSettings(
-      {
-        ...adminSettings,
-        display: {
-          ...adminSettings.display,
-          [field]: value,
-        },
-      },
-      'Preferences d affichage mises a jour',
-    )
+    persistInterfaceSettings({ [field]: value }, 'Preferences d affichage mises a jour')
   }
 
   const toggleDisplayWidget = (widget) => {
-    persistAdminSettings(
+    persistInterfaceSettings(
       {
-        ...adminSettings,
-        display: {
-          ...adminSettings.display,
-          widgets: {
-            ...adminSettings.display.widgets,
-            [widget]: !adminSettings.display.widgets[widget],
-          },
+        widgets: {
+          [widget]: !interfaceSettings.widgets[widget],
         },
       },
       'Widgets du dashboard mis a jour',
+    )
+  }
+
+  const toggleNavigationPreference = (field) => {
+    persistInterfaceSettings(
+      {
+        navigation: {
+          [field]: !interfaceSettings.navigation[field],
+        },
+      },
+      'Navigation du dashboard mise a jour',
     )
   }
 
@@ -6839,11 +7288,11 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
     <section className="settings-panel" aria-label="Parametres du compte">
       {/* En-tete commun des parametres Admin : un onglet controle chaque famille de reglage. */}
       <div className="dashboard-hero admin-dashboard-title">
-        <p className="eyebrow">Parametres Admin</p>
-        <h1>Compte, securite et entreprise.</h1>
+        <p className="eyebrow">{isAdmin ? 'Parametres Admin' : `Parametres ${user.role}`}</p>
+        <h1>{isAdmin ? 'Compte, securite et entreprise.' : 'Compte, securite et interface.'}</h1>
         <p>
-          Mettez a jour vos informations, controlez les sessions actives et gardez les donnees
-          administratives de M Group a jour.
+          Mettez a jour vos informations, controlez les sessions actives et adaptez votre espace
+          de travail a votre profil.
         </p>
       </div>
 
@@ -7248,8 +7697,10 @@ function SettingsPanel({ onAdminEvent, onCompanyUpdate, onProfileUpdate, onReque
 
       {activeTab === 'display' && (
         <DisplayPreferencesSettings
-          preferences={adminSettings.display}
+          isSaving={savingTarget === 'interface'}
+          preferences={interfaceSettings}
           onChange={updateDisplayPreference}
+          onToggleNavigation={toggleNavigationPreference}
           onToggleWidget={toggleDisplayWidget}
         />
       )}
@@ -7426,13 +7877,23 @@ function AdminUsersSettings({
   )
 }
 
-function DisplayPreferencesSettings({ onChange, onToggleWidget, preferences }) {
+function DisplayPreferencesSettings({
+  isSaving,
+  onChange,
+  onToggleNavigation,
+  onToggleWidget,
+  preferences,
+}) {
   const widgetLabels = {
-    budget: 'Budget',
-    events: 'Evenements',
     alerts: 'Alertes',
-    team: 'Equipe',
+    budget: 'Budget',
+    clients: 'Clients',
+    documents: 'Documents',
+    events: 'Evenements',
     finance: 'Finance',
+    hr: 'RH',
+    reports: 'Rapports',
+    workflows: 'Workflows',
   }
 
   return (
@@ -7441,6 +7902,7 @@ function DisplayPreferencesSettings({ onChange, onToggleWidget, preferences }) {
         <div>
           <p className="eyebrow">Preferences d'affichage</p>
           <h2>Adapter le dashboard.</h2>
+          <p>Ces reglages sont sauvegardes sur votre compte et suivront vos connexions.</p>
         </div>
         <MonitorCog size={34} aria-hidden="true" />
       </div>
@@ -7450,6 +7912,30 @@ function DisplayPreferencesSettings({ onChange, onToggleWidget, preferences }) {
           <select value={preferences.theme} onChange={(event) => onChange('theme', event.target.value)}>
             <option value="light">Clair</option>
             <option value="dark">Sombre</option>
+          </select>
+        </label>
+        <label>
+          Couleur principale
+          <input
+            type="color"
+            value={preferences.primaryColor}
+            onChange={(event) => onChange('primaryColor', event.target.value)}
+          />
+        </label>
+        <label>
+          Couleur accent
+          <input
+            type="color"
+            value={preferences.accentColor}
+            onChange={(event) => onChange('accentColor', event.target.value)}
+          />
+        </label>
+        <label>
+          Sidebar
+          <select value={preferences.sidebarStyle} onChange={(event) => onChange('sidebarStyle', event.target.value)}>
+            <option value="dark">Sombre</option>
+            <option value="light">Claire</option>
+            <option value="brand">Couleur principale</option>
           </select>
         </label>
         <label>
@@ -7484,10 +7970,33 @@ function DisplayPreferencesSettings({ onChange, onToggleWidget, preferences }) {
           </select>
         </label>
       </div>
+      <div className="interface-preview" aria-label="Apercu des couleurs">
+        <span style={{ backgroundColor: preferences.primaryColor }}></span>
+        <span style={{ backgroundColor: preferences.accentColor }}></span>
+        <strong>{preferences.theme === 'dark' ? 'Theme sombre' : 'Theme clair'}</strong>
+        <small>{preferences.language === 'en' ? 'English interface' : 'Interface francaise'}</small>
+      </div>
+      <div className="settings-section-grid">
+        {[
+          ['compactSidebar', 'Sidebar compacte'],
+          ['showIcons', 'Afficher les icones du menu'],
+          ['stickyHeader', 'En-tete fixe'],
+        ].map(([field, label]) => (
+          <label className="settings-toggle" key={field}>
+            <input
+              type="checkbox"
+              checked={preferences.navigation[field]}
+              disabled={isSaving}
+              onChange={() => onToggleNavigation(field)}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
       <div className="settings-section-grid">
         {Object.entries(preferences.widgets).map(([widget, enabled]) => (
           <label className="settings-toggle" key={widget}>
-            <input type="checkbox" checked={enabled} onChange={() => onToggleWidget(widget)} />
+            <input type="checkbox" checked={enabled} disabled={isSaving} onChange={() => onToggleWidget(widget)} />
             Afficher {widgetLabels[widget]}
           </label>
         ))}

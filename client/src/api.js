@@ -165,6 +165,12 @@ export const api = {
       method: 'PATCH',
       body: payload,
     }),
+  getInterfacePreferences: () => request('/users/me/preferences'),
+  updateInterfacePreferences: (payload) =>
+    request('/users/me/preferences', {
+      method: 'PATCH',
+      body: payload,
+    }),
   getCompany: () => request('/setup/company'),
   updateCompany: (payload) =>
     request('/setup/company', {

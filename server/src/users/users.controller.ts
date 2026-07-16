@@ -5,6 +5,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../common/types/authenticated-user';
 import { ApproveUserDto } from './dto/approve-user.dto';
+import { UpdateInterfacePreferenceDto } from './dto/interface-preference.dto';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -23,6 +24,19 @@ export class UsersController {
   @Patch('me')
   updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
     return this.users.updateMe(user, dto);
+  }
+
+  @Get('me/preferences')
+  getInterfacePreferences(@CurrentUser() user: AuthenticatedUser) {
+    return this.users.getInterfacePreferences(user);
+  }
+
+  @Patch('me/preferences')
+  updateInterfacePreferences(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateInterfacePreferenceDto,
+  ) {
+    return this.users.updateInterfacePreferences(user, dto);
   }
 
   @Roles(RoleName.ADMIN)

@@ -198,6 +198,20 @@ Si le setup est deja fait, l'application verifie ensuite la session :
 
 La page d'accueil du site reste accessible depuis les boutons `Accueil du site`, mais elle n'est plus la destination automatique apres une deconnexion ou un rafraichissement sans session.
 
+## Page d'accueil publique
+
+La page d'accueil a ete enrichie pour ressembler a une vraie vitrine professionnelle M Group :
+
+- hero evenementiel avec image plein ecran, navigation, boutons `Lire la suite`, `Voir nos prestations` et `Mon Espace` ;
+- indicateurs rapides : pilotage complet, modules metier, alertes/rappels et budgets FCFA ;
+- section `A propos` avec image, badge visuel et preuves operationnelles ;
+- bande de direction operationnelle : coordination centrale, suivi terrain et tableaux de bord ;
+- grille de prestations : production, coordination artistique, administration, commercial, budget et RH ;
+- section methode : cadrer, planifier, valider, mesurer ;
+- section plateforme : modules Evenements, Finances, RH, Commercial, Documents et Rapports ;
+- section experience terrain et CTA vers l'espace connecte ;
+- footer enrichi avec liens rapides, marque, copyright et credit conception.
+
 ## Parcours Administrateur
 
 1. L'administrateur remplit les informations de l'entreprise.
@@ -399,6 +413,19 @@ La vue generale n'est plus statique. Elle charge les donnees API selon le role :
 
 Les anciens pictogrammes texte du menu ont ete remplaces par des icones `lucide-react`.
 
+Les dashboards ont aussi ete rendus coherents par profil :
+
+- Admin : pilotage global, validations, finance, budget, RH, documents, rapports, alertes et parametres complets ;
+- RH : personnel, disponibilites, missions, contrats, documents administratifs, workflows RH, evenements et alertes ;
+- Commercial : clients, prospects, demandes de prestations, devis, pipeline, documents commerciaux, rapports et alertes.
+
+Les profils futurs sont prevus dans la structure :
+
+- Secretaire : agenda, documents administratifs, evenements et suivi operationnel ;
+- Comptable : budgets, paiements, factures, recus, rapports financiers et alertes budget ;
+- Client : suivi des demandes, documents partages, devis/factures et historique des prestations ;
+- Autre : acces restreint selon les modules que l'Admin activera.
+
 Dans `Parametres > Profil utilisateur`, l'utilisateur peut modifier :
 
 - sa photo de profil ;
@@ -481,11 +508,27 @@ GET   /api/users/:id/history
 Dans `Parametres > Affichage`, l'utilisateur peut regler :
 
 - theme clair/sombre ;
+- couleur principale du dashboard ;
+- couleur accent ;
+- style de sidebar sombre, claire ou couleur principale ;
 - langue francais/anglais ;
 - format de date ;
 - fuseau horaire ;
 - densite du dashboard ;
-- affichage/masquage des widgets.
+- affichage/masquage des widgets ;
+- sidebar compacte ;
+- affichage/masquage des icones du menu ;
+- en-tete fixe.
+
+Ces preferences sont maintenant sauvegardees en base dans la table `InterfacePreference`.
+Elles suivent donc l'utilisateur entre plusieurs connexions.
+
+Routes utilisees :
+
+```txt
+GET   /api/users/me/preferences
+PATCH /api/users/me/preferences
+```
 
 Dans `Parametres > Notifications`, l'utilisateur peut regler :
 
@@ -516,7 +559,9 @@ Dans `Parametres > Journal`, l'Admin voit les actions sensibles :
 - reset mot de passe ;
 - desactivation/reactivation de compte.
 
-Les preferences, notifications et modules sont stockes en `localStorage` pour le prototype. En production, il faudra ajouter des tables Prisma dediees.
+Les preferences d'interface sont stockees dans PostgreSQL avec Prisma. Les reglages
+`Notifications` et `Modules` restent encore en `localStorage` pour le prototype ; en production,
+il faudra leur ajouter des tables dediees.
 
 ## Gestion evenementielle
 
@@ -940,6 +985,8 @@ Users :
 ```txt
 GET   /api/users/me
 PATCH /api/users/me
+GET   /api/users/me/preferences
+PATCH /api/users/me/preferences
 GET   /api/users
 GET   /api/users/pending
 GET   /api/users/activity
@@ -987,6 +1034,7 @@ Tables principales :
 - `ClientExchange`
 - `BusinessDocument`
 - `ReportExport`
+- `InterfacePreference`
 - `LoginAuditLog`
 
 Actions d'audit principales :
@@ -1033,6 +1081,7 @@ CLIENT_EXCHANGE_CREATED
 DOCUMENT_CREATED
 DOCUMENT_VALIDATED
 REPORT_EXPORTED
+INTERFACE_PREFERENCES_UPDATED
 ```
 
 Statuts utilisateur :
@@ -1232,6 +1281,7 @@ Cela signifie que le setup initial a deja ete fait sur la base locale actuelle.
 - Le frontend est maintenant branche sur le backend.
 - Les donnees de setup, connexion, inscription et validation admin passent par l'API.
 - Les donnees du profil connecte peuvent etre modifiees depuis `Parametres`.
+- Les preferences d'interface sont persistantes par utilisateur via `InterfacePreference`.
 - Les parametres Admin gerent maintenant le profil, la securite du compte et l'entreprise.
 - Les sessions actives peuvent etre consultees et revoquees depuis l'interface.
 - Les modules Commercial, Documents et Rapports sont maintenant branches sur Prisma et l'API NestJS.

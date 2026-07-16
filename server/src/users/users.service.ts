@@ -6,6 +6,7 @@ import { PasswordService } from '../common/security/password.service';
 import { AuthenticatedUser } from '../common/types/authenticated-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveUserDto } from './dto/approve-user.dto';
+import { UpdateInterfacePreferenceDto } from './dto/interface-preference.dto';
 import { ResetUserPasswordDto } from './dto/reset-user-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -252,7 +253,7 @@ export class UsersService {
   async me(user: AuthenticatedUser) {
     const dbUser = await this.prisma.user.findUnique({
       where: { id: user.sub },
-      include: { roles: { include: { role: true } } },
+      include: { roles: { include: { role: true } }, interfacePreference: true },
     });
 
     if (!dbUser) {
@@ -287,7 +288,7 @@ export class UsersService {
         emailVerifiedAt:
           email && currentUser?.email !== email ? null : undefined,
       },
-      include: { roles: { include: { role: true } } },
+      include: { roles: { include: { role: true } }, interfacePreference: true },
     });
 
     await this.prisma.loginAuditLog.create({
@@ -298,6 +299,53 @@ export class UsersService {
     });
 
     return this.toPublicUser(updated);
+  }
+
+  async getInterfacePreferences(user: AuthenticatedUser) {
+    return this.ensureInterfacePreferences(user.sub);
+  }
+
+  async updateInterfacePreferences(user: AuthenticatedUser, dto: UpdateInterfacePreferenceDto) {
+    const current = await this.ensureInterfacePreferences(user.sub);
+    const updated = await this.prisma.interfacePreference.update({
+      where: { userId: user.sub },
+      data: {
+        theme: this.clean(dto.theme),
+        language: this.clean(dto.language),
+        primaryColor: this.clean(dto.primaryColor),
+        accentColor: this.clean(dto.accentColor),
+        sidebarStyle: this.clean(dto.sidebarStyle),
+        density: this.clean(dto.density),
+        dateFormat: this.clean(dto.dateFormat),
+        timezone: this.clean(dto.timezone),
+        widgets: dto.widgets
+          ? {
+              ...((current.widgets as Record<string, boolean> | null) ?? {}),
+              ...dto.widgets,
+            }
+          : undefined,
+        navigation: dto.navigation
+          ? {
+              ...((current.navigation as Record<string, boolean> | null) ?? {}),
+              ...dto.navigation,
+            }
+          : undefined,
+      },
+    });
+
+    await this.prisma.loginAuditLog.create({
+      data: {
+        userId: user.sub,
+        action: AuditAction.INTERFACE_PREFERENCES_UPDATED,
+        metadata: {
+          theme: updated.theme,
+          language: updated.language,
+          density: updated.density,
+        },
+      },
+    });
+
+    return this.toInterfacePreferences(updated);
   }
 
   private async ensureRoles() {
@@ -329,6 +377,84 @@ export class UsersService {
     return value === undefined ? undefined : value.trim();
   }
 
+  private async ensureInterfacePreferences(userId: string) {
+    await this.ensureUserExists(userId);
+
+    const existing = await this.prisma.interfacePreference.findUnique({ where: { userId } });
+
+    if (existing) {
+      return this.toInterfacePreferences(existing);
+    }
+
+    const created = await this.prisma.interfacePreference.create({
+      data: {
+        userId,
+        widgets: this.defaultWidgetPreferences(),
+        navigation: this.defaultNavigationPreferences(),
+      },
+    });
+
+    return this.toInterfacePreferences(created);
+  }
+
+  private defaultWidgetPreferences() {
+    return {
+      alerts: true,
+      budget: true,
+      clients: true,
+      documents: true,
+      events: true,
+      finance: true,
+      hr: true,
+      reports: true,
+      workflows: true,
+    };
+  }
+
+  private defaultNavigationPreferences() {
+    return {
+      compactSidebar: false,
+      showIcons: true,
+      stickyHeader: true,
+    };
+  }
+
+  private toInterfacePreferences(preferences: {
+    id: string;
+    userId: string;
+    theme: string;
+    language: string;
+    primaryColor: string;
+    accentColor: string;
+    sidebarStyle: string;
+    density: string;
+    dateFormat: string;
+    timezone: string;
+    widgets?: unknown;
+    navigation?: unknown;
+  }) {
+    return {
+      id: preferences.id,
+      userId: preferences.userId,
+      theme: preferences.theme,
+      language: preferences.language,
+      primaryColor: preferences.primaryColor,
+      accentColor: preferences.accentColor,
+      sidebarStyle: preferences.sidebarStyle,
+      density: preferences.density,
+      dateFormat: preferences.dateFormat,
+      timezone: preferences.timezone,
+      widgets: {
+        ...this.defaultWidgetPreferences(),
+        ...((preferences.widgets as Record<string, boolean> | null) ?? {}),
+      },
+      navigation: {
+        ...this.defaultNavigationPreferences(),
+        ...((preferences.navigation as Record<string, boolean> | null) ?? {}),
+      },
+    };
+  }
+
   private toPublicUser(user: {
     id: string;
     firstName: string;
@@ -345,6 +471,20 @@ export class UsersService {
     twoFactorEnabled?: boolean;
     lastPasswordChangedAt?: Date | null;
     roles?: Array<{ role: { name: RoleName; label: string } }>;
+    interfacePreference?: {
+      id: string;
+      userId: string;
+      theme: string;
+      language: string;
+      primaryColor: string;
+      accentColor: string;
+      sidebarStyle: string;
+      density: string;
+      dateFormat: string;
+      timezone: string;
+      widgets?: unknown;
+      navigation?: unknown;
+    } | null;
   }) {
     return {
       id: user.id,
@@ -361,6 +501,9 @@ export class UsersService {
       lockedUntil: user.lockedUntil,
       twoFactorEnabled: user.twoFactorEnabled,
       lastPasswordChangedAt: user.lastPasswordChangedAt,
+      interfacePreference: user.interfacePreference
+        ? this.toInterfacePreferences(user.interfacePreference)
+        : null,
       roles: user.roles?.map(({ role }) => ({
         name: role.name,
         label: role.label,
