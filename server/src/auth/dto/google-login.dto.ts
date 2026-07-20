@@ -8,3 +8,16 @@ export class GoogleLoginDto {
   @IsBoolean()
   rememberMe?: boolean;
 }
+
+export class GoogleCodeLoginDto {
+  @IsString()
+  code: string;
+
+  @IsOptional()
+  @IsString()
+  redirectUri?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  rememberMe?: boolean;
+}

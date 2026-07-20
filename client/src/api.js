@@ -30,6 +30,7 @@ const request = async (path, options = {}) => {
     '/auth/login',
     '/auth/refresh',
     '/auth/google',
+    '/auth/google/code',
     '/auth/phone/verify-otp',
     '/auth/2fa/verify-login',
     '/auth/reset-password',
@@ -84,6 +85,11 @@ export const api = {
     }),
   googleLogin: (payload) =>
     request('/auth/google', {
+      method: 'POST',
+      body: payload,
+    }),
+  googleCodeLogin: (payload) =>
+    request('/auth/google/code', {
       method: 'POST',
       body: payload,
     }),

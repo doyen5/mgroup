@@ -25,7 +25,7 @@ import { AuthenticatedUser } from '../common/types/authenticated-user';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { GoogleLoginDto } from './dto/google-login.dto';
+import { GoogleCodeLoginDto, GoogleLoginDto } from './dto/google-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RequestPhoneOtpDto } from './dto/request-phone-otp.dto';
@@ -177,6 +177,15 @@ export class AuthService {
   }
 
   async googleLogin(dto: GoogleLoginDto, metadata: AuthMetadata) {
+    return this.loginWithGoogleIdToken(dto.idToken, dto.rememberMe, metadata);
+  }
+
+  async googleCodeLogin(dto: GoogleCodeLoginDto, metadata: AuthMetadata) {
+    const idToken = await this.exchangeGoogleCode(dto.code, dto.redirectUri);
+    return this.loginWithGoogleIdToken(idToken, dto.rememberMe, metadata);
+  }
+
+  private async loginWithGoogleIdToken(idToken: string, rememberMe = false, metadata: AuthMetadata) {
     const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
 
     if (!clientId) {
@@ -184,7 +193,7 @@ export class AuthService {
     }
 
     const ticket = await this.googleClient.verifyIdToken({
-      idToken: dto.idToken,
+      idToken,
       audience: clientId,
     });
     const payload = ticket.getPayload();
@@ -237,7 +246,7 @@ export class AuthService {
       return this.createTwoFactorChallenge(user, metadata);
     }
 
-    return this.completeLogin(user, dto.rememberMe, metadata, AuditAction.GOOGLE_LOGIN_SUCCESS);
+    return this.completeLogin(user, rememberMe, metadata, AuditAction.GOOGLE_LOGIN_SUCCESS);
   }
 
   async requestPhoneOtp(dto: RequestPhoneOtpDto) {
@@ -267,6 +276,7 @@ export class AuthService {
     return {
       message,
       smsDelivered: delivery.delivered,
+      smsReason: delivery.reason,
       developmentOtp: this.shouldExposeDevTokens() ? code : undefined,
       expiresAt,
     };
@@ -704,6 +714,41 @@ export class AuthService {
     await this.audit(user.id, AuditAction.USER_REGISTERED, {}, { source: 'google' });
 
     return user;
+  }
+
+  private async exchangeGoogleCode(code: string, redirectUri?: string) {
+    const clientId = this.config.get<string>('GOOGLE_CLIENT_ID');
+    const clientSecret = this.config.get<string>('GOOGLE_CLIENT_SECRET');
+
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException('Google OAuth code flow is not configured.');
+    }
+
+    const body = new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri ?? this.config.get<string>('CLIENT_ORIGIN') ?? 'http://127.0.0.1:5173',
+      grant_type: 'authorization_code',
+    });
+
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    if (!response.ok) {
+      throw new UnauthorizedException('Google authorization code is invalid or expired.');
+    }
+
+    const data = (await response.json()) as { id_token?: string };
+
+    if (!data.id_token) {
+      throw new UnauthorizedException('Google did not return an identity token.');
+    }
+
+    return data.id_token;
   }
 
   private async createEmailVerification(userId: string, email: string) {

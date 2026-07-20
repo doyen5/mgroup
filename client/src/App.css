@@ -228,7 +228,8 @@
 }
 
 .auth-switch button:hover,
-.social-row button:hover {
+.social-row button:hover,
+.google-identity-button:hover {
   transform: translateY(-2px);
 }
 
@@ -281,6 +282,26 @@
   font-weight: 900;
   box-shadow: 0 10px 24px rgba(47, 109, 212, 0.12);
   transition: transform 0.2s ease;
+}
+
+.google-identity-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  color: #2f6dd4;
+  background: #ffffff;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(47, 109, 212, 0.12);
+  transition: transform 0.2s ease;
+}
+
+.google-identity-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .auth-separator {

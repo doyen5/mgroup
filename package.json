@@ -1,5 +1,9 @@
 {
   "scripts": {
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "dev": "node scripts/dev-all.js",
+    "dev:all": "npm run dev",
     "client:dev": "npm --prefix client run dev",
     "client:build": "npm --prefix client run build",
     "server:dev": "npm --prefix server run start:dev",

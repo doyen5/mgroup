@@ -14,7 +14,7 @@ import { AuthenticatedUser } from '../common/types/authenticated-user';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { GoogleLoginDto } from './dto/google-login.dto';
+import { GoogleCodeLoginDto, GoogleLoginDto } from './dto/google-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -63,6 +63,20 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.auth.googleLogin(dto, {
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'],
+    });
+    return this.completeAuthResponse(response, result);
+  }
+
+  @Post('google/code')
+  async googleCode(
+    @Body() dto: GoogleCodeLoginDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    // Flux popup Google : le frontend donne un code court, le backend l'echange cote serveur.
+    const result = await this.auth.googleCodeLogin(dto, {
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'],
     });

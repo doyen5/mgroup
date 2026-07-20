@@ -18,7 +18,10 @@ import { WorkflowsModule } from './workflows/workflows.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['server/.env', '.env'],
+    }),
     PrismaModule,
     SecurityModule,
     AuthModule,

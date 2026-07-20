@@ -101,28 +101,37 @@ Depuis la racine du projet :
 cd D:\PROJETS\Dev\mgroup-app
 ```
 
-Demarrer PostgreSQL :
+Premiere installation, si les dependances ne sont pas encore installees :
 
 ```powershell
-docker compose up -d postgres
+npm install
+npm --prefix client install
+npm --prefix server install
 ```
 
-Installer et configurer le backend :
+Configurer le backend une seule fois :
 
 ```powershell
 cd D:\PROJETS\Dev\mgroup-app\server
-npm install
 Copy-Item .env.example .env
 npm run prisma:migrate
-npm run start:dev
 ```
 
-Demarrer le frontend dans un autre terminal :
+Ensuite, pour lancer toute l'application en une seule commande depuis la racine :
 
 ```powershell
 cd D:\PROJETS\Dev\mgroup-app
-npm run client:dev
+npm run dev
 ```
+
+Cette commande fait trois choses automatiquement :
+
+- demarre PostgreSQL avec Docker Compose ;
+- attend que PostgreSQL reponde sur le port `5432` ;
+- lance le backend NestJS et le frontend Vite en parallele.
+
+Pour arreter le frontend et le backend, faire `Ctrl+C` dans le terminal.
+PostgreSQL reste actif dans Docker ; pour l'arreter aussi, utiliser `npm run db:down`.
 
 Ouvrir :
 
@@ -134,6 +143,12 @@ L'API est disponible sur :
 
 ```txt
 http://127.0.0.1:4000/api
+```
+
+Alias disponible :
+
+```powershell
+npm run dev:all
 ```
 
 ## Variables d'environnement
@@ -156,6 +171,7 @@ EMAIL_VERIFICATION_HOURS=24
 PHONE_OTP_MINUTES=10
 TWO_FACTOR_CHALLENGE_MINUTES=10
 GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
 SMTP_HOST=""
 SMTP_PORT=587
 SMTP_SECURE=false
@@ -835,7 +851,7 @@ La priorite securite contient maintenant :
 
 - verification email apres inscription avec `EmailVerificationToken` ;
 - reset de mot de passe par email SMTP ;
-- connexion Gmail avec verification backend du `idToken` Google ;
+- connexion Google avec popup OAuth, echange du code cote backend et verification du `idToken` Google ;
 - connexion par telephone avec OTP SMS via Twilio ;
 - double authentification Admin par TOTP ;
 - blocage temporaire du compte apres plusieurs echecs de connexion ;
@@ -865,6 +881,7 @@ Auth :
 POST /api/auth/register
 POST /api/auth/login
 POST /api/auth/google
+POST /api/auth/google/code
 POST /api/auth/verify-email
 POST /api/auth/resend-email-verification
 POST /api/auth/phone/request-otp
@@ -1154,6 +1171,15 @@ A ajouter avant production :
 Depuis la racine :
 
 ```powershell
+npm run dev
+npm run dev:all
+```
+
+Ces deux commandes lancent PostgreSQL, l'API NestJS et le frontend Vite ensemble.
+
+Commandes separees :
+
+```powershell
 npm run client:dev
 npm run client:build
 npm run server:dev
@@ -1197,6 +1223,8 @@ Docker :
 docker compose up -d postgres
 docker compose ps
 docker compose down
+npm run db:up
+npm run db:down
 ```
 
 ## Verifications effectuees

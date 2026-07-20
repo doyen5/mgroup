@@ -453,42 +453,40 @@ const loadGoogleIdentityScript = () =>
     document.head.appendChild(script)
   })
 
-const requestGoogleCredential = async () => {
+const requestGoogleAuthCode = async () => {
   await loadGoogleIdentityScript()
 
   return new Promise((resolve, reject) => {
     let settled = false
-    const timeoutId = window.setTimeout(() => {
-      if (!settled) {
-        settled = true
-        reject(new Error("Google n'a pas renvoye de jeton. Reessayez."))
-      }
-    }, 30000)
 
-    window.google.accounts.id.initialize({
+    // Le mode code ouvre un popup Google et confie l'echange securise au backend.
+    const codeClient = window.google.accounts.oauth2.initCodeClient({
       client_id: googleClientId,
+      scope: 'openid email profile',
+      ux_mode: 'popup',
       callback(response) {
         if (settled) {
           return
         }
 
         settled = true
-        window.clearTimeout(timeoutId)
-        resolve(response.credential)
+
+        if (response?.code) {
+          resolve(response.code)
+          return
+        }
+
+        reject(new Error(response?.error || "Google n'a pas renvoye de code d'autorisation."))
+      },
+      error_callback() {
+        if (!settled) {
+          settled = true
+          reject(new Error('Le popup Google a ete ferme ou bloque par le navigateur.'))
+        }
       },
     })
 
-    window.google.accounts.id.prompt((notification) => {
-      if (settled) {
-        return
-      }
-
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        settled = true
-        window.clearTimeout(timeoutId)
-        reject(new Error('La fenetre Google ne peut pas etre affichee pour le moment.'))
-      }
-    })
+    codeClient.requestCode()
   })
 }
 
@@ -927,11 +925,13 @@ function App() {
     setAuthNotice('')
 
     try {
-      const idToken = await requestGoogleCredential()
-      const result = await api.googleLogin({ idToken })
+      const code = await requestGoogleAuthCode()
+      const result = await api.googleCodeLogin({ code, redirectUri: window.location.origin })
       await handleAuthenticatedResult(result)
     } catch (error) {
-      setAuthNotice(error.message)
+      setAuthNotice(
+        `${error.message} Verifiez aussi les origines autorisees Google Cloud et les utilisateurs de test OAuth.`,
+      )
     } finally {
       setIsAuthBusy(false)
     }
@@ -1471,6 +1471,20 @@ function HomeView({ onOpenAuth }) {
   )
 }
 
+function GoogleIdentityButton({ disabled, onClick }) {
+  return (
+    <button
+      type="button"
+      className="google-identity-button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label="Connexion Google"
+    >
+      G
+    </button>
+  )
+}
+
 function AuthPage({
   authMode,
   initialResetToken,
@@ -1592,9 +1606,16 @@ function AuthPage({
           className="social-row"
           aria-label={authMode === 'register' ? 'Inscription sociale' : 'Connexion sociale'}
         >
-          <button type="button" onClick={onGmailAccess} aria-label="Gmail">
-            G
-          </button>
+          {googleClientId ? (
+            <GoogleIdentityButton
+              disabled={isBusy}
+              onClick={onGmailAccess}
+            />
+          ) : (
+            <button type="button" onClick={onGmailAccess} aria-label="Google">
+              G
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -1766,7 +1787,7 @@ function PhoneOtpPanel({ isBusy, onBack, onSuccess }) {
       setNotice(
         result.smsDelivered
           ? 'Code envoye par SMS.'
-          : 'Code genere. Configurez Twilio pour envoyer le SMS reel.',
+          : `Code genere. SMS non envoye : ${result.smsReason ?? 'verifiez Twilio, le numero destinataire et les permissions pays.'}`,
       )
     } catch (error) {
       setNotice(error.message)
