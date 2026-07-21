@@ -603,6 +603,9 @@ Fonctionnalites disponibles :
 - checklist avant evenement avec cases a cocher ;
 - statuts : `DRAFT`, `IN_PREPARATION`, `VALIDATED`, `COMPLETED`, `CANCELLED` ;
 - calendrier/liste des evenements dans le dashboard ;
+- recherche, filtre par statut, tri et pagination dans la liste des evenements ;
+- modification rapide de la fiche evenement : titre, lieu, dates, budget, statut, responsable et description ;
+- suppression controlee d'un evenement par les roles autorises ;
 - pieces jointes : contrats, fiches techniques, devis, photos ou autre document ;
 - droits par profil : Commercial/Secretaire peuvent creer un evenement, RH/Admin gerent production, affectations et checklist, Commercial/Comptable peuvent joindre des pieces utiles.
 
@@ -623,6 +626,9 @@ La priorite finance ajoute un module connecte aux evenements.
 Fonctionnalites disponibles :
 
 - budget previsionnel par evenement ;
+- recherche, filtre par statut, tri et pagination dans les budgets ;
+- modification et suppression des budgets previsionnels ;
+- suppression des depenses et paiements saisis par erreur ;
 - validation ou rejet des budgets par l'Admin ;
 - budget enrichi avec categorie, centre de cout, marge de securite, justification et notes ;
 - depenses reelles par categorie, prestataire, date, reference piece, mode de paiement et responsable de validation ;
@@ -772,6 +778,9 @@ Fonctionnalites disponibles :
 - suivi du pipeline avec statuts `NEW`, `IN_DISCUSSION`, `WON`, `LOST` ;
 - suivi des demandes avec statuts `NEW`, `IN_DISCUSSION`, `QUOTED`, `WON`, `LOST`, `CANCELLED` ;
 - suivi des devis avec statuts `DRAFT`, `SENT`, `ACCEPTED`, `REJECTED`, `EXPIRED` ;
+- recherche, filtre, tri et pagination pour les clients/prospects et les devis ;
+- changement rapide du statut d'un devis : brouillon, envoye, gagne, perdu ou expire ;
+- suppression controlee d'un client/prospect ou d'un devis ;
 - historique des echanges par client : canal, sujet, notes et date ;
 - cartes KPI : clients, prospects ouverts, demandes actives et chiffre d'affaires gagne.
 
@@ -809,10 +818,14 @@ Fonctionnalites disponibles :
 - types : devis, facture, recu, contrat, fiche technique, photo, administratif, rapport ou autre ;
 - statuts : brouillon, a valider, valide, rejete, signe, archive ;
 - formulaires harmonises avec confidentialite, version, responsable document, validation attendue, objet commercial, conditions de paiement, delai de validite et signataire attendu ;
-- generation prototype de PDF avec modele M Group et logo inclus ;
+- generation de PDF M Group plus propre : bandeau, logo stylise, reference, contenu structure, zone signature et mention de validation interne ;
+- numerotation automatique des documents generes : `DEV-annee-numero`, `FAC-annee-numero`, `REC-annee-numero`, `CTR-annee-numero` selon le type ;
 - ouverture des PDF generes via une structure PDF complete compatible navigateur ;
 - reconstruction automatique des anciens PDF generes quand la liste documentaire est rechargee ;
 - bouton `Ouvrir` fiabilise cote frontend : les Data URLs et PDF generes sont transformes en `Blob URL` avant ouverture ;
+- recherche, filtre par statut, tri et pagination dans le centre documentaire ;
+- modification rapide du libelle, type, statut, modele et notes ;
+- archivage ou suppression controlee d'un document ;
 - validation ou rejet interne reserve a l'Admin ;
 - notifications Admin quand un document attend validation.
 

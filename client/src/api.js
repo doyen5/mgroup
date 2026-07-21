@@ -223,6 +223,10 @@ export const api = {
       method: 'PATCH',
       body: payload,
     }),
+  deleteEvent: (eventId) =>
+    request(`/events/${eventId}`, {
+      method: 'DELETE',
+    }),
   addEventAssignment: (eventId, payload) =>
     request(`/events/${eventId}/assignments`, {
       method: 'POST',
@@ -273,6 +277,10 @@ export const api = {
       method: 'PATCH',
       body: payload,
     }),
+  deleteEventBudget: (budgetId) =>
+    request(`/finance/budgets/${budgetId}`, {
+      method: 'DELETE',
+    }),
   approveEventBudget: (budgetId, payload = {}) =>
     request(`/finance/budgets/${budgetId}/approve`, {
       method: 'PATCH',
@@ -288,6 +296,10 @@ export const api = {
       method: 'POST',
       body: payload,
     }),
+  deleteEventExpense: (expenseId) =>
+    request(`/finance/expenses/${expenseId}`, {
+      method: 'DELETE',
+    }),
   createEventPayment: (eventId, payload) =>
     request(`/finance/events/${eventId}/payments`, {
       method: 'POST',
@@ -297,6 +309,10 @@ export const api = {
     request(`/finance/payments/${paymentId}`, {
       method: 'PATCH',
       body: payload,
+    }),
+  deleteEventPayment: (paymentId) =>
+    request(`/finance/payments/${paymentId}`, {
+      method: 'DELETE',
     }),
   createFinanceDocument: (eventId, payload) =>
     request(`/finance/events/${eventId}/documents`, {
@@ -380,6 +396,10 @@ export const api = {
       method: 'PATCH',
       body: payload,
     }),
+  deleteCommercialClient: (clientId) =>
+    request(`/commercial/clients/${clientId}`, {
+      method: 'DELETE',
+    }),
   createServiceRequest: (payload) =>
     request('/commercial/requests', {
       method: 'POST',
@@ -390,6 +410,10 @@ export const api = {
       method: 'PATCH',
       body: payload,
     }),
+  deleteServiceRequest: (requestId) =>
+    request(`/commercial/requests/${requestId}`, {
+      method: 'DELETE',
+    }),
   createCommercialQuote: (payload) =>
     request('/commercial/quotes', {
       method: 'POST',
@@ -399,6 +423,10 @@ export const api = {
     request(`/commercial/quotes/${quoteId}`, {
       method: 'PATCH',
       body: payload,
+    }),
+  deleteCommercialQuote: (quoteId) =>
+    request(`/commercial/quotes/${quoteId}`, {
+      method: 'DELETE',
     }),
   createClientExchange: (payload) =>
     request('/commercial/exchanges', {
@@ -420,6 +448,15 @@ export const api = {
     request(`/documents/${documentId}/validate`, {
       method: 'PATCH',
       body: payload,
+    }),
+  updateBusinessDocument: (documentId, payload) =>
+    request(`/documents/${documentId}`, {
+      method: 'PATCH',
+      body: payload,
+    }),
+  deleteBusinessDocument: (documentId) =>
+    request(`/documents/${documentId}`, {
+      method: 'DELETE',
     }),
   getReportsSummary: (params = {}) => {
     const query = new URLSearchParams(cleanPayload(params)).toString()

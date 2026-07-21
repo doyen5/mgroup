@@ -74,6 +74,56 @@ export class ValidateBusinessDocumentDto {
   notes?: string;
 }
 
+export class UpdateBusinessDocumentDto {
+  @IsOptional()
+  @IsString()
+  eventId?: string;
+
+  @IsOptional()
+  @IsString()
+  clientId?: string;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
+
+  @IsOptional()
+  @IsString()
+  label?: string;
+
+  @IsOptional()
+  @IsString()
+  url?: string;
+
+  @IsOptional()
+  @IsEnum(BusinessDocumentType)
+  type?: BusinessDocumentType;
+
+  @IsOptional()
+  @IsEnum(BusinessDocumentStatus)
+  status?: BusinessDocumentStatus;
+
+  @IsOptional()
+  @IsString()
+  fileName?: string;
+
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @IsOptional()
+  @IsString()
+  templateName?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  logoIncluded?: boolean;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
 export class GenerateBusinessDocumentDto {
   @IsEnum(BusinessDocumentScope)
   scope: BusinessDocumentScope;

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { RoleName } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -49,6 +49,12 @@ export class CommercialController {
     return this.commercial.updateClient(clientId, user, dto);
   }
 
+  @Delete('clients/:clientId')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
+  removeClient(@Param('clientId') clientId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.commercial.removeClient(clientId, user);
+  }
+
   @Post('requests')
   @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   createRequest(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateServiceRequestDto) {
@@ -65,6 +71,12 @@ export class CommercialController {
     return this.commercial.updateRequest(requestId, user, dto);
   }
 
+  @Delete('requests/:requestId')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
+  removeRequest(@Param('requestId') requestId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.commercial.removeRequest(requestId, user);
+  }
+
   @Post('quotes')
   @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   createQuote(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateQuoteDto) {
@@ -79,6 +91,12 @@ export class CommercialController {
     @Body() dto: UpdateQuoteDto,
   ) {
     return this.commercial.updateQuote(quoteId, user, dto);
+  }
+
+  @Delete('quotes/:quoteId')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
+  removeQuote(@Param('quoteId') quoteId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.commercial.removeQuote(quoteId, user);
   }
 
   @Post('exchanges')

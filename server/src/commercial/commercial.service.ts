@@ -156,6 +156,20 @@ export class CommercialService {
     return client;
   }
 
+  async removeClient(clientId: string, user: AuthenticatedUser) {
+    const client = await this.prisma.commercialClient.findUnique({ where: { id: clientId } });
+
+    if (!client) {
+      throw new NotFoundException('Client not found.');
+    }
+
+    // La suppression client nettoie les demandes, devis et echanges grace aux relations en cascade.
+    await this.prisma.commercialClient.delete({ where: { id: clientId } });
+    await this.audit(user, AuditAction.CLIENT_CREATED, { clientId, name: client.name, deleted: true });
+
+    return this.overview();
+  }
+
   async createRequest(user: AuthenticatedUser, dto: CreateServiceRequestDto) {
     await this.ensureClientExists(dto.clientId);
 
@@ -208,6 +222,19 @@ export class CommercialService {
     });
 
     await this.audit(user, AuditAction.SERVICE_REQUEST_CREATED, { requestId, updated: true });
+    return this.overview();
+  }
+
+  async removeRequest(requestId: string, user: AuthenticatedUser) {
+    const request = await this.prisma.serviceRequest.findUnique({ where: { id: requestId } });
+
+    if (!request) {
+      throw new NotFoundException('Service request not found.');
+    }
+
+    await this.prisma.serviceRequest.delete({ where: { id: requestId } });
+    await this.audit(user, AuditAction.SERVICE_REQUEST_CREATED, { requestId, deleted: true });
+
     return this.overview();
   }
 
@@ -288,6 +315,23 @@ export class CommercialService {
     }
 
     await this.audit(user, AuditAction.QUOTE_STATUS_UPDATED, { quoteId, status: dto.status ?? quote.status });
+    return this.overview();
+  }
+
+  async removeQuote(quoteId: string, user: AuthenticatedUser) {
+    const quote = await this.prisma.commercialQuote.findUnique({ where: { id: quoteId } });
+
+    if (!quote) {
+      throw new NotFoundException('Quote not found.');
+    }
+
+    await this.prisma.commercialQuote.delete({ where: { id: quoteId } });
+    await this.audit(user, AuditAction.QUOTE_STATUS_UPDATED, {
+      quoteId,
+      quoteNumber: quote.quoteNumber,
+      deleted: true,
+    });
+
     return this.overview();
   }
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { RoleName } from '@prisma/client';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -8,6 +8,7 @@ import { DocumentsService } from './documents.service';
 import {
   CreateBusinessDocumentDto,
   GenerateBusinessDocumentDto,
+  UpdateBusinessDocumentDto,
   ValidateBusinessDocumentDto,
 } from './dto/document.dto';
 
@@ -38,6 +39,15 @@ export class DocumentsController {
     return this.documents.generate(user, dto);
   }
 
+  @Patch(':documentId')
+  update(
+    @Param('documentId') documentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateBusinessDocumentDto,
+  ) {
+    return this.documents.update(documentId, user, dto);
+  }
+
   @Roles(RoleName.ADMIN)
   @Patch(':documentId/validate')
   validate(
@@ -46,5 +56,10 @@ export class DocumentsController {
     @Body() dto: ValidateBusinessDocumentDto,
   ) {
     return this.documents.validate(documentId, user, dto);
+  }
+
+  @Delete(':documentId')
+  remove(@Param('documentId') documentId: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.documents.remove(documentId, user);
   }
 }

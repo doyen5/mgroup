@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateBusinessDocumentDto,
   GenerateBusinessDocumentDto,
+  UpdateBusinessDocumentDto,
   ValidateBusinessDocumentDto,
 } from './dto/document.dto';
 
@@ -128,10 +129,61 @@ export class DocumentsService {
     return document;
   }
 
+  async update(documentId: string, user: AuthenticatedUser, dto: UpdateBusinessDocumentDto) {
+    const current = await this.findDocument(documentId);
+    await this.ensureScopeTarget(current.scope, {
+      eventId: dto.eventId ?? current.eventId ?? undefined,
+      clientId: dto.clientId ?? current.clientId ?? undefined,
+      userId: dto.userId ?? current.userId ?? undefined,
+    });
+
+    const document = await this.prisma.businessDocument.update({
+      where: { id: documentId },
+      data: {
+        eventId: this.clean(dto.eventId),
+        clientId: this.clean(dto.clientId),
+        userId: this.clean(dto.userId),
+        label: this.clean(dto.label),
+        url: this.clean(dto.url),
+        type: dto.type,
+        status: dto.status,
+        fileName: this.clean(dto.fileName),
+        mimeType: this.clean(dto.mimeType),
+        templateName: this.clean(dto.templateName),
+        logoIncluded: dto.logoIncluded,
+        notes: this.clean(dto.notes),
+      },
+      include: documentInclude,
+    });
+
+    await this.audit(user, AuditAction.DOCUMENT_CREATED, {
+      documentId,
+      updated: true,
+      status: document.status,
+    });
+
+    return this.withOpenableGeneratedPdf(document);
+  }
+
+  async remove(documentId: string, user: AuthenticatedUser) {
+    const document = await this.findDocument(documentId);
+
+    await this.prisma.businessDocument.delete({ where: { id: documentId } });
+    await this.audit(user, AuditAction.DOCUMENT_CREATED, {
+      documentId,
+      label: document.label,
+      deleted: true,
+    });
+
+    return this.overview();
+  }
+
   async generate(user: AuthenticatedUser, dto: GenerateBusinessDocumentDto) {
     await this.ensureScopeTarget(dto.scope, dto);
     const company = await this.prisma.company.findFirst();
-    const pdfText = await this.buildDocumentText(dto);
+    const reference = await this.nextDocumentNumber(dto.type);
+    const normalizedLabel = `${reference} - ${dto.label.trim()}`;
+    const pdfText = await this.buildDocumentText(dto, reference);
 
     return this.create(user, {
       scope: dto.scope,
@@ -139,18 +191,18 @@ export class DocumentsService {
       clientId: dto.clientId,
       userId: dto.userId,
       type: dto.type,
-      label: dto.label,
+      label: normalizedLabel,
       url: this.toPdfDataUrl(pdfText),
-      fileName: `${dto.label.trim().replace(/\s+/g, '-').toLowerCase()}.pdf`,
+      fileName: `${reference}-${this.slugify(dto.label)}.pdf`,
       mimeType: 'application/pdf',
       templateName: dto.templateName ?? 'Modele M Group',
       logoIncluded: true,
       status: BusinessDocumentStatus.PENDING_VALIDATION,
-      notes: [company?.documentFooter, dto.notes].filter(Boolean).join(' - '),
+      notes: [`Reference : ${reference}`, company?.documentFooter, dto.notes].filter(Boolean).join(' - '),
     });
   }
 
-  private async buildDocumentText(dto: GenerateBusinessDocumentDto) {
+  private async buildDocumentText(dto: GenerateBusinessDocumentDto, reference: string) {
     const [company, event, client, user] = await Promise.all([
       this.prisma.company.findFirst(),
       dto.eventId ? this.prisma.event.findUnique({ where: { id: dto.eventId } }) : null,
@@ -159,15 +211,19 @@ export class DocumentsService {
     ]);
 
     return [
-      company?.name ?? 'M Group',
-      `Document : ${dto.label}`,
-      `Type : ${dto.type}`,
+      `Reference : ${reference}`,
+      `Entreprise : ${company?.name ?? 'M Group'}`,
+      `Document : ${dto.label.trim()}`,
+      `Type : ${this.documentTypeLabel(dto.type)}`,
       `Modele : ${dto.templateName ?? 'Modele M Group avec logo'}`,
+      `Date : ${new Date().toLocaleDateString('fr-FR')}`,
       client ? `Client : ${client.name}` : '',
       event ? `Evenement : ${event.title}` : '',
       user ? `Utilisateur : ${user.lastName} ${user.firstName}` : '',
       dto.amountFcfa ? `Montant : ${dto.amountFcfa} FCFA` : '',
       dto.notes ? `Notes : ${dto.notes}` : '',
+      'Validation interne : document a valider avant envoi externe.',
+      'Signature : Direction M Group',
       company?.documentFooter ?? 'Document genere par M Group.',
     ]
       .filter(Boolean)
@@ -178,7 +234,7 @@ export class DocumentsService {
     return [
       document.company?.name ?? 'M Group',
       `Document : ${document.label}`,
-      `Type : ${document.type}`,
+      `Type : ${this.documentTypeLabel(document.type)}`,
       `Statut : ${document.status}`,
       `Modele : ${document.templateName ?? 'Modele M Group avec logo'}`,
       document.client ? `Client : ${document.client.name}` : '',
@@ -215,20 +271,63 @@ export class DocumentsService {
 
   private toPdfBuffer(content: string) {
     const lines = this.toPdfLines(content);
-    const textCommands = lines
-      .map((line, index) => `${index === 0 ? '' : 'T* '}(${this.escapePdfText(line)}) Tj`)
+    const title = lines[0] ?? 'Document M Group';
+    const body = lines.slice(1);
+    const bodyCommands = body
+      .map((line, index) => `BT /F1 10 Tf 72 ${665 - index * 18} Td (${this.escapePdfText(line)}) Tj ET`)
       .join('\n');
-    const stream = `BT
-/F1 12 Tf
-40 780 Td
-16 TL
-${textCommands}
-ET`;
+    const stream = `q
+0.02 0.03 0.05 rg
+0 0 595 842 re f
+Q
+q
+0.95 0.97 1 rg
+46 716 503 78 re f
+Q
+q
+1 0.48 0.1 rg
+66 742 44 34 re f
+Q
+q
+1 1 1 rg
+BT /F2 24 Tf 78 749 Td (M) Tj ET
+Q
+q
+0.07 0.14 0.25 rg
+BT /F2 19 Tf 126 761 Td (M GROUP) Tj ET
+BT /F1 10 Tf 126 744 Td (Document professionnel avec logo et validation interne) Tj ET
+Q
+q
+1 0.48 0.1 rg
+46 698 503 4 re f
+Q
+q
+1 1 1 rg
+BT /F2 22 Tf 72 672 Td (${this.escapePdfText(title)}) Tj ET
+Q
+q
+0.85 0.9 0.97 rg
+46 104 503 528 re f
+Q
+q
+0.07 0.14 0.25 rg
+${bodyCommands}
+Q
+q
+1 0.48 0.1 rg
+72 92 160 1.5 re f
+Q
+q
+0.95 0.97 1 rg
+BT /F2 11 Tf 72 72 Td (Signature et validation interne M Group) Tj ET
+BT /F1 9 Tf 72 56 Td (Ce document doit etre valide selon le workflow interne avant diffusion externe.) Tj ET
+Q`;
     const objects = [
       '<< /Type /Catalog /Pages 2 0 R >>',
       '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>',
       '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
       `<< /Length ${Buffer.byteLength(stream, 'ascii')} >>
 stream
 ${stream}
@@ -248,7 +347,7 @@ endstream`,
       .join('\n');
     pdf += `xref
 0 ${objects.length + 1}
-0000000000 65535 f 
+0000000000 65535 f
 ${xrefEntries}
 trailer
 << /Size ${objects.length + 1} /Root 1 0 R >>
@@ -277,7 +376,76 @@ ${xrefOffset}
 
         return chunks;
       })
-      .slice(0, 42);
+      .slice(0, 28);
+  }
+
+  private async findDocument(documentId: string) {
+    const document = await this.prisma.businessDocument.findUnique({
+      where: { id: documentId },
+      include: documentInclude,
+    });
+
+    if (!document) {
+      throw new NotFoundException('Document not found.');
+    }
+
+    return document;
+  }
+
+  private async nextDocumentNumber(type: GenerateBusinessDocumentDto['type']) {
+    const year = new Date().getFullYear();
+    const prefix = this.documentPrefix(type);
+    const count = await this.prisma.businessDocument.count({
+      where: {
+        type,
+        createdAt: {
+          gte: new Date(`${year}-01-01T00:00:00.000Z`),
+          lt: new Date(`${year + 1}-01-01T00:00:00.000Z`),
+        },
+      },
+    });
+
+    return `${prefix}-${year}-${String(count + 1).padStart(4, '0')}`;
+  }
+
+  private documentPrefix(type: GenerateBusinessDocumentDto['type']) {
+    const prefixes: Record<string, string> = {
+      QUOTE: 'DEV',
+      INVOICE: 'FAC',
+      RECEIPT: 'REC',
+      CONTRACT: 'CTR',
+      REPORT: 'RAP',
+      TECHNICAL_SHEET: 'TEC',
+      ADMINISTRATIVE: 'ADM',
+      PHOTO: 'IMG',
+      OTHER: 'DOC',
+    };
+
+    return prefixes[type] ?? 'DOC';
+  }
+
+  private documentTypeLabel(type: GenerateBusinessDocumentDto['type']) {
+    const labels: Record<string, string> = {
+      QUOTE: 'Devis',
+      INVOICE: 'Facture',
+      RECEIPT: 'Recu',
+      CONTRACT: 'Contrat',
+      TECHNICAL_SHEET: 'Fiche technique',
+      PHOTO: 'Photo',
+      ADMINISTRATIVE: 'Administratif',
+      REPORT: 'Rapport',
+      OTHER: 'Document',
+    };
+
+    return labels[type] ?? type;
+  }
+
+  private slugify(value: string) {
+    return this.toPdfSafeText(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 48);
   }
 
   private toPdfSafeText(value: string) {

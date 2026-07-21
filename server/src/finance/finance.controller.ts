@@ -41,6 +41,11 @@ export class FinanceController {
     return this.finance.updateBudget(budgetId, dto);
   }
 
+  @Delete('budgets/:budgetId')
+  removeBudget(@Param('budgetId') budgetId: string) {
+    return this.finance.removeBudget(budgetId);
+  }
+
   @Roles(RoleName.ADMIN)
   @Patch('budgets/:budgetId/approve')
   approveBudget(
@@ -66,6 +71,11 @@ export class FinanceController {
     return this.finance.createExpense(eventId, dto);
   }
 
+  @Delete('expenses/:expenseId')
+  removeExpense(@Param('expenseId') expenseId: string) {
+    return this.finance.removeExpense(expenseId);
+  }
+
   @Post('events/:eventId/payments')
   createPayment(@Param('eventId') eventId: string, @Body() dto: CreatePaymentDto) {
     return this.finance.createPayment(eventId, dto);
@@ -74,6 +84,11 @@ export class FinanceController {
   @Patch('payments/:paymentId')
   updatePayment(@Param('paymentId') paymentId: string, @Body() dto: UpdatePaymentDto) {
     return this.finance.updatePayment(paymentId, dto);
+  }
+
+  @Delete('payments/:paymentId')
+  removePayment(@Param('paymentId') paymentId: string) {
+    return this.finance.removePayment(paymentId);
   }
 
   @Post('events/:eventId/documents')

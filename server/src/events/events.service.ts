@@ -80,6 +80,19 @@ export class EventsService {
     return this.findEvent(eventId);
   }
 
+  async remove(eventId: string) {
+    const event = await this.findEvent(eventId);
+
+    // La suppression d'un evenement supprime aussi ses sous-elements Prisma en cascade.
+    await this.prisma.event.delete({ where: { id: eventId } });
+
+    return {
+      deleted: true,
+      id: event.id,
+      title: event.title,
+    };
+  }
+
   async update(eventId: string, dto: UpdateEventDto) {
     await this.ensureEventExists(eventId);
 

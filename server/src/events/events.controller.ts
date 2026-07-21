@@ -38,6 +38,12 @@ export class EventsController {
     return this.events.detail(eventId);
   }
 
+  @Delete(':id')
+  @Roles(RoleName.ADMIN, RoleName.RH)
+  remove(@Param('id') eventId: string) {
+    return this.events.remove(eventId);
+  }
+
   @Patch(':id')
   @Roles(RoleName.ADMIN, RoleName.RH, RoleName.SECRETAIRE)
   update(@Param('id') eventId: string, @Body() dto: UpdateEventDto) {

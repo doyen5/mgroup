@@ -117,6 +117,13 @@ export class FinanceService {
     return this.eventFinance(budget.eventId);
   }
 
+  async removeBudget(budgetId: string) {
+    const budget = await this.findBudget(budgetId);
+
+    await this.prisma.eventBudget.delete({ where: { id: budgetId } });
+    return this.eventFinance(budget.eventId);
+  }
+
   async approveBudget(budgetId: string, dto: ValidateBudgetDto, admin: AuthenticatedUser) {
     const budget = await this.findBudget(budgetId);
 
@@ -184,6 +191,17 @@ export class FinanceService {
     return eventFinance;
   }
 
+  async removeExpense(expenseId: string) {
+    const expense = await this.prisma.eventExpense.findUnique({ where: { id: expenseId } });
+
+    if (!expense) {
+      throw new NotFoundException('Expense not found.');
+    }
+
+    await this.prisma.eventExpense.delete({ where: { id: expenseId } });
+    return this.eventFinance(expense.eventId);
+  }
+
   async createPayment(eventId: string, dto: CreatePaymentDto) {
     await this.ensureEventExists(eventId);
     await this.prisma.eventPayment.create({
@@ -224,6 +242,17 @@ export class FinanceService {
       },
     });
 
+    return this.eventFinance(payment.eventId);
+  }
+
+  async removePayment(paymentId: string) {
+    const payment = await this.prisma.eventPayment.findUnique({ where: { id: paymentId } });
+
+    if (!payment) {
+      throw new NotFoundException('Payment not found.');
+    }
+
+    await this.prisma.eventPayment.delete({ where: { id: paymentId } });
     return this.eventFinance(payment.eventId);
   }
 

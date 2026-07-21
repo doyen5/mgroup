@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Copy,
+  Edit3,
   Eye,
   FileText,
   Gauge,
@@ -28,6 +29,7 @@ import {
   Smartphone,
   Timer,
   Trophy,
+  Trash2,
   UserPlus,
   UserCheck,
   Users,
@@ -516,7 +518,7 @@ endstream`,
   const xrefEntries = objectOffsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')
   pdf += `xref
 0 ${objects.length + 1}
-0000000000 65535 f 
+0000000000 65535 f
 ${xrefEntries}
 trailer
 << /Size ${objects.length + 1} /Root 1 0 R >>
@@ -4316,6 +4318,128 @@ function ModuleHeader({ description, icon: Icon, label, title }) {
   )
 }
 
+const defaultListState = {
+  page: 1,
+  pageSize: 8,
+  search: '',
+  sort: 'recent',
+  status: 'ALL',
+}
+
+const normalizeListText = (value) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+const applyListControls = (items, state, config = {}) => {
+  const pageSize = Number(state.pageSize || defaultListState.pageSize)
+  const statusGetter = config.statusGetter ?? (() => '')
+  const searchGetter = config.searchGetter ?? ((item) => JSON.stringify(item))
+  const sorters = config.sorters ?? {}
+  const search = normalizeListText(state.search)
+
+  const filteredItems = items.filter((item) => {
+    const matchesSearch = !search || normalizeListText(searchGetter(item)).includes(search)
+    const matchesStatus = state.status === 'ALL' || statusGetter(item) === state.status
+    return matchesSearch && matchesStatus
+  })
+  const sorter = sorters[state.sort]
+  const sortedItems = sorter ? [...filteredItems].sort(sorter) : filteredItems
+  const pageCount = Math.max(1, Math.ceil(sortedItems.length / pageSize))
+  const page = Math.min(Math.max(Number(state.page || 1), 1), pageCount)
+  const start = (page - 1) * pageSize
+
+  return {
+    items: sortedItems.slice(start, start + pageSize),
+    page,
+    pageCount,
+    total: sortedItems.length,
+  }
+}
+
+function ListToolbar({ listState, onChange, searchPlaceholder, sortOptions, statusOptions }) {
+  const update = (patch) => onChange({ ...patch, page: 1 })
+
+  return (
+    <div className="list-toolbar">
+      <label>
+        Recherche
+        <input
+          type="search"
+          value={listState.search}
+          placeholder={searchPlaceholder}
+          onChange={(event) => update({ search: event.target.value })}
+        />
+      </label>
+      {statusOptions?.length > 0 && (
+        <label>
+          Statut
+          <select value={listState.status} onChange={(event) => update({ status: event.target.value })}>
+            <option value="ALL">Tous</option>
+            {statusOptions.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label>
+        Tri
+        <select value={listState.sort} onChange={(event) => update({ sort: event.target.value })}>
+          {sortOptions.map((sort) => (
+            <option key={sort.value} value={sort.value}>
+              {sort.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
+}
+
+function PaginationControls({ listState, onChange, page, pageCount, total }) {
+  return (
+    <div className="pagination-controls">
+      <span>
+        {total} resultat(s) - page {page}/{pageCount}
+      </span>
+      <label>
+        Par page
+        <select
+          value={listState.pageSize}
+          onChange={(event) => onChange({ pageSize: Number(event.target.value), page: 1 })}
+        >
+          {[5, 8, 12, 20].map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div>
+        <button
+          type="button"
+          className="secondary-button bordered"
+          disabled={page <= 1}
+          onClick={() => onChange({ page: page - 1 })}
+        >
+          Precedent
+        </button>
+        <button
+          type="button"
+          className="secondary-button bordered"
+          disabled={page >= pageCount}
+          onClick={() => onChange({ page: page + 1 })}
+        >
+          Suivant
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function CommercialPage({ user }) {
   const [overview, setOverview] = useState(null)
   const [events, setEvents] = useState([])
@@ -4323,6 +4447,8 @@ function CommercialPage({ user }) {
   const [notice, setNotice] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [clientListState, setClientListState] = useState(defaultListState)
+  const [quoteListState, setQuoteListState] = useState(defaultListState)
 
   const refreshCommercial = useCallback(async () => {
     setNotice('')
@@ -4366,6 +4492,27 @@ function CommercialPage({ user }) {
   }, [refreshCommercial])
 
   const selectedClient = overview?.clients.find((client) => client.id === selectedClientId)
+  const clientList = applyListControls(overview?.clients ?? [], clientListState, {
+    searchGetter: (client) =>
+      `${client.name} ${client.contactName ?? ''} ${client.email ?? ''} ${client.phone ?? ''} ${client.notes ?? ''}`,
+    statusGetter: (client) => client.status,
+    sorters: {
+      recent: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
+      titleAsc: (a, b) => a.name.localeCompare(b.name),
+      titleDesc: (a, b) => b.name.localeCompare(a.name),
+    },
+  })
+  const quoteList = applyListControls(overview?.quotes ?? [], quoteListState, {
+    searchGetter: (quote) =>
+      `${quote.quoteNumber} ${quote.title} ${quote.client?.name ?? ''} ${quote.notes ?? ''}`,
+    statusGetter: (quote) => quote.status,
+    sorters: {
+      recent: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
+      amountDesc: (a, b) => b.amountFcfa - a.amountFcfa,
+      amountAsc: (a, b) => a.amountFcfa - b.amountFcfa,
+      titleAsc: (a, b) => a.title.localeCompare(b.title),
+    },
+  })
 
   const submitClient = async (event) => {
     event.preventDefault()
@@ -4407,6 +4554,58 @@ function CommercialPage({ user }) {
     try {
       await api.updateCommercialClient(client.id, { status })
       await refreshCommercial()
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const deleteClient = async (client) => {
+    if (!window.confirm(`Supprimer le client "${client.name}" et son historique commercial ?`)) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const nextOverview = await api.deleteCommercialClient(client.id)
+      setOverview(nextOverview)
+      setSelectedClientId(nextOverview.clients[0]?.id ?? '')
+      setNotice('Client supprime du pipeline.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const updateQuoteStatus = async (quote, status) => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      setOverview(await api.updateCommercialQuote(quote.id, { status }))
+      setNotice('Statut du devis mis a jour.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const deleteQuote = async (quote) => {
+    if (!window.confirm(`Supprimer le devis ${quote.quoteNumber} ?`)) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      setOverview(await api.deleteCommercialQuote(quote.id))
+      setNotice('Devis supprime.')
     } catch (error) {
       setNotice(error.message)
     } finally {
@@ -4653,8 +4852,19 @@ function CommercialPage({ user }) {
               </article>
             ))}
           </div>
+          <ListToolbar
+            listState={clientListState}
+            onChange={(patch) => setClientListState((current) => ({ ...current, ...patch }))}
+            searchPlaceholder="Rechercher client, contact, email..."
+            statusOptions={commercialStatusOptions}
+            sortOptions={[
+              { value: 'recent', label: 'Derniere activite' },
+              { value: 'titleAsc', label: 'Nom A-Z' },
+              { value: 'titleDesc', label: 'Nom Z-A' },
+            ]}
+          />
           <div className="business-list">
-            {(overview?.clients ?? []).map((client) => (
+            {clientList.items.map((client) => (
               <button
                 type="button"
                 className={selectedClientId === client.id ? 'active' : ''}
@@ -4666,10 +4876,17 @@ function CommercialPage({ user }) {
                 <small>{client.email || client.phone || 'Contact a completer'}</small>
               </button>
             ))}
-            {!overview?.clients?.length && (
+            {clientList.total === 0 && (
               <p className="approval-empty">{isLoading ? 'Chargement...' : 'Aucun client commercial.'}</p>
             )}
           </div>
+          <PaginationControls
+            listState={clientListState}
+            onChange={(patch) => setClientListState((current) => ({ ...current, ...patch }))}
+            page={clientList.page}
+            pageCount={clientList.pageCount}
+            total={clientList.total}
+          />
         </section>
       </section>
 
@@ -4811,6 +5028,15 @@ function CommercialPage({ user }) {
                     {status.label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={isSaving}
+                  onClick={() => deleteClient(selectedClient)}
+                >
+                  <Trash2 size={16} aria-hidden="true" />
+                  Supprimer
+                </button>
               </div>
             </>
           ) : (
@@ -5045,17 +5271,62 @@ function CommercialPage({ user }) {
             <h2>Suivi operationnel.</h2>
           </div>
         </div>
+        <ListToolbar
+          listState={quoteListState}
+          onChange={(patch) => setQuoteListState((current) => ({ ...current, ...patch }))}
+          searchPlaceholder="Rechercher devis, client, reference..."
+          statusOptions={quoteStatusOptions}
+          sortOptions={[
+            { value: 'recent', label: 'Derniere activite' },
+            { value: 'amountDesc', label: 'Montant decroissant' },
+            { value: 'amountAsc', label: 'Montant croissant' },
+            { value: 'titleAsc', label: 'Titre A-Z' },
+          ]}
+        />
         <div className="finance-table business-table">
-          {(overview?.quotes ?? []).slice(0, 8).map((quote) => (
+          {quoteList.items.map((quote) => (
             <div key={quote.id}>
               <span>{quote.quoteNumber}</span>
               <em>{quote.client.name}</em>
               <strong>{formatFcfa(quote.amountFcfa)}</strong>
               <small>{quoteStatusLabel(quote.status)}</small>
+              <div className="table-actions">
+                <button
+                  type="button"
+                  className="secondary-button bordered"
+                  disabled={isSaving || quote.status === 'SENT'}
+                  onClick={() => updateQuoteStatus(quote, 'SENT')}
+                >
+                  Envoyer
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={isSaving || quote.status === 'ACCEPTED'}
+                  onClick={() => updateQuoteStatus(quote, 'ACCEPTED')}
+                >
+                  Gagne
+                </button>
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={isSaving}
+                  onClick={() => deleteQuote(quote)}
+                >
+                  <Trash2 size={16} aria-hidden="true" />
+                </button>
+              </div>
             </div>
           ))}
-          {!overview?.quotes?.length && <p>Aucun devis commercial.</p>}
+          {quoteList.total === 0 && <p>Aucun devis commercial.</p>}
         </div>
+        <PaginationControls
+          listState={quoteListState}
+          onChange={(patch) => setQuoteListState((current) => ({ ...current, ...patch }))}
+          page={quoteList.page}
+          pageCount={quoteList.pageCount}
+          total={quoteList.total}
+        />
       </section>
     </section>
   )
@@ -5070,6 +5341,20 @@ function DocumentsPage({ isAdmin }) {
   const [notice, setNotice] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [documentListState, setDocumentListState] = useState(defaultListState)
+  const [editingDocument, setEditingDocument] = useState(null)
+
+  const documentList = applyListControls(overview?.documents ?? [], documentListState, {
+    searchGetter: (document) =>
+      `${document.label} ${document.fileName ?? ''} ${document.notes ?? ''} ${document.client?.name ?? ''} ${document.event?.title ?? ''}`,
+    statusGetter: (document) => document.status,
+    sorters: {
+      recent: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
+      titleAsc: (a, b) => a.label.localeCompare(b.label),
+      scopeAsc: (a, b) => a.scope.localeCompare(b.scope),
+      typeAsc: (a, b) => a.type.localeCompare(b.type),
+    },
+  })
 
   const refreshDocuments = useCallback(async () => {
     setNotice('')
@@ -5208,17 +5493,80 @@ function DocumentsPage({ isAdmin }) {
     }
   }
 
+  const submitDocumentUpdate = async (event) => {
+    event.preventDefault()
+
+    if (!editingDocument) {
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.updateBusinessDocument(editingDocument.id, {
+        label: getFormValue(formData, 'label'),
+        type: getFormValue(formData, 'type') || editingDocument.type,
+        status: getFormValue(formData, 'status') || editingDocument.status,
+        templateName: getFormValue(formData, 'templateName'),
+        notes: getFormValue(formData, 'notes'),
+      })
+      setEditingDocument(null)
+      await refreshDocuments()
+      setNotice('Document modifie.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const archiveDocument = async (document) => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.updateBusinessDocument(document.id, { status: 'ARCHIVED' })
+      await refreshDocuments()
+      setNotice('Document archive.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const deleteDocument = async (document) => {
+    if (!window.confirm(`Supprimer le document "${document.label}" ?`)) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      const nextOverview = await api.deleteBusinessDocument(document.id)
+      setOverview(nextOverview)
+      setNotice('Document supprime.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const openDocument = (document) => {
     setNotice('')
 
     try {
-      if (document.mimeType === 'application/pdf' && document.templateName) {
-        openBlobInNewTab(buildBusinessDocumentPdfBlob(document))
+      if (document.url?.startsWith('data:')) {
+        openBlobInNewTab(dataUrlToBlob(document.url))
         return
       }
 
-      if (document.url?.startsWith('data:')) {
-        openBlobInNewTab(dataUrlToBlob(document.url))
+      if (document.mimeType === 'application/pdf' && document.templateName) {
+        openBlobInNewTab(buildBusinessDocumentPdfBlob(document))
         return
       }
 
@@ -5462,8 +5810,69 @@ function DocumentsPage({ isAdmin }) {
             Actualiser
           </button>
         </div>
+        <ListToolbar
+          listState={documentListState}
+          onChange={(patch) => setDocumentListState((current) => ({ ...current, ...patch }))}
+          searchPlaceholder="Rechercher document, client, evenement..."
+          statusOptions={businessDocumentStatuses}
+          sortOptions={[
+            { value: 'recent', label: 'Derniere activite' },
+            { value: 'titleAsc', label: 'Libelle A-Z' },
+            { value: 'scopeAsc', label: 'Cible' },
+            { value: 'typeAsc', label: 'Type' },
+          ]}
+        />
+        {editingDocument && (
+          <form className="quick-edit-form" onSubmit={submitDocumentUpdate} key={editingDocument.id}>
+            <label>
+              Libelle
+              <input name="label" type="text" defaultValue={editingDocument.label} required />
+            </label>
+            <label>
+              Type
+              <select name="type" defaultValue={editingDocument.type}>
+                {businessDocumentTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Statut
+              <select name="status" defaultValue={editingDocument.status}>
+                {businessDocumentStatuses.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Modele
+              <input name="templateName" type="text" defaultValue={editingDocument.templateName ?? ''} />
+            </label>
+            <label className="wide-field">
+              Notes
+              <textarea name="notes" defaultValue={editingDocument.notes ?? ''} />
+            </label>
+            <div className="form-actions-row">
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                Enregistrer
+              </button>
+              <button
+                type="button"
+                className="secondary-button bordered"
+                disabled={isSaving}
+                onClick={() => setEditingDocument(null)}
+              >
+                Annuler
+              </button>
+            </div>
+          </form>
+        )}
         <div className="document-list">
-          {(overview?.documents ?? []).map((document) => (
+          {documentList.items.map((document) => (
             <article key={document.id}>
               <div>
                 <span>{businessDocumentTypeLabel(document.type)} - {documentScopeLabel(document.scope)}</span>
@@ -5477,6 +5886,23 @@ function DocumentsPage({ isAdmin }) {
                   onClick={() => openDocument(document)}
                 >
                   Ouvrir
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button bordered"
+                  disabled={isSaving}
+                  onClick={() => setEditingDocument(document)}
+                >
+                  <Edit3 size={16} aria-hidden="true" />
+                  Modifier
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button bordered"
+                  disabled={isSaving || document.status === 'ARCHIVED'}
+                  onClick={() => archiveDocument(document)}
+                >
+                  Archiver
                 </button>
                 {isAdmin && (
                   <>
@@ -5498,13 +5924,29 @@ function DocumentsPage({ isAdmin }) {
                     </button>
                   </>
                 )}
+                <button
+                  type="button"
+                  className="danger-button"
+                  disabled={isSaving}
+                  onClick={() => deleteDocument(document)}
+                >
+                  <Trash2 size={16} aria-hidden="true" />
+                  Supprimer
+                </button>
               </div>
             </article>
           ))}
-          {!overview?.documents?.length && (
+          {documentList.total === 0 && (
             <p className="approval-empty">{isLoading ? 'Chargement...' : 'Aucun document.'}</p>
           )}
         </div>
+        <PaginationControls
+          listState={documentListState}
+          onChange={(patch) => setDocumentListState((current) => ({ ...current, ...patch }))}
+          page={documentList.page}
+          pageCount={documentList.pageCount}
+          total={documentList.total}
+        />
       </section>
     </section>
   )
@@ -5731,6 +6173,8 @@ function FinanceWorkspacePage({ isAdmin = false }) {
   const [notice, setNotice] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [budgetListState, setBudgetListState] = useState(defaultListState)
+  const [editingBudget, setEditingBudget] = useState(null)
 
   useEffect(() => {
     let isMounted = true
@@ -5870,6 +6314,89 @@ function FinanceWorkspacePage({ isAdmin = false }) {
     }
   }
 
+  const submitBudgetUpdate = async (event) => {
+    event.preventDefault()
+
+    if (!editingBudget) {
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await syncFinance(
+        await api.updateEventBudget(editingBudget.id, {
+          label: getFormValue(formData, 'label'),
+          plannedAmountFcfa: Number(getFormValue(formData, 'plannedAmountFcfa') || 0),
+          status: getFormValue(formData, 'status') || editingBudget.status,
+          notes: getFormValue(formData, 'notes'),
+        }),
+      )
+      setEditingBudget(null)
+      setNotice('Budget modifie.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const deleteBudget = async (budget) => {
+    if (!window.confirm(`Supprimer le budget "${budget.label}" ?`)) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await syncFinance(await api.deleteEventBudget(budget.id))
+      setNotice('Budget supprime.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const deleteExpense = async (expense) => {
+    if (!window.confirm(`Supprimer la depense "${expense.label}" ?`)) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await syncFinance(await api.deleteEventExpense(expense.id))
+      setNotice('Depense supprimee.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const deletePayment = async (payment) => {
+    if (!window.confirm(`Supprimer le paiement "${payment.label}" ?`)) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await syncFinance(await api.deleteEventPayment(payment.id))
+      setNotice('Paiement supprime.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const submitExpense = async (event) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
@@ -5976,6 +6503,16 @@ function FinanceWorkspacePage({ isAdmin = false }) {
   }
 
   const finance = eventFinance?.finance
+  const budgetList = applyListControls(eventFinance?.budgets ?? [], budgetListState, {
+    searchGetter: (budget) => `${budget.label} ${budget.notes ?? ''}`,
+    statusGetter: (budget) => budget.status,
+    sorters: {
+      recent: (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt),
+      amountDesc: (a, b) => b.plannedAmountFcfa - a.plannedAmountFcfa,
+      amountAsc: (a, b) => a.plannedAmountFcfa - b.plannedAmountFcfa,
+      titleAsc: (a, b) => a.label.localeCompare(b.label),
+    },
+  })
 
   return (
     <>
@@ -6097,14 +6634,65 @@ function FinanceWorkspacePage({ isAdmin = false }) {
                 Ajouter
               </button>
             </form>
+            {editingBudget && (
+              <form className="quick-edit-form compact" onSubmit={submitBudgetUpdate} key={editingBudget.id}>
+                <input name="label" type="text" defaultValue={editingBudget.label} required />
+                <input
+                  name="plannedAmountFcfa"
+                  type="number"
+                  min="0"
+                  defaultValue={editingBudget.plannedAmountFcfa}
+                  required
+                />
+                <select name="status" defaultValue={editingBudget.status}>
+                  {budgetStatusOptions.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+                <input name="notes" type="text" defaultValue={editingBudget.notes ?? ''} />
+                <button type="submit" className="primary-button" disabled={isSaving}>
+                  Enregistrer
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button bordered"
+                  disabled={isSaving}
+                  onClick={() => setEditingBudget(null)}
+                >
+                  Annuler
+                </button>
+              </form>
+            )}
+            <ListToolbar
+              listState={budgetListState}
+              onChange={(patch) => setBudgetListState((current) => ({ ...current, ...patch }))}
+              searchPlaceholder="Rechercher budget, notes..."
+              statusOptions={budgetStatusOptions}
+              sortOptions={[
+                { value: 'recent', label: 'Derniere activite' },
+                { value: 'amountDesc', label: 'Montant decroissant' },
+                { value: 'amountAsc', label: 'Montant croissant' },
+                { value: 'titleAsc', label: 'Libelle A-Z' },
+              ]}
+            />
             <div className="finance-table">
-              {eventFinance.budgets.map((budget) => (
+              {budgetList.items.map((budget) => (
                 <div key={budget.id}>
                   <span>{budget.label}</span>
                   <strong>{formatFcfa(budget.plannedAmountFcfa)}</strong>
                   <em>{budgetStatusLabel(budget.status)}</em>
                   {isAdmin ? (
                     <div className="table-actions">
+                      <button
+                        type="button"
+                        className="secondary-button bordered"
+                        disabled={isSaving}
+                        onClick={() => setEditingBudget(budget)}
+                      >
+                        Modifier
+                      </button>
                       <button
                         type="button"
                         className="secondary-button bordered"
@@ -6121,14 +6709,46 @@ function FinanceWorkspacePage({ isAdmin = false }) {
                       >
                         Rejeter
                       </button>
+                      <button
+                        type="button"
+                        className="danger-button"
+                        disabled={isSaving}
+                        onClick={() => deleteBudget(budget)}
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                      </button>
                     </div>
                   ) : (
-                    <small>Validation Admin requise</small>
+                    <div className="table-actions">
+                      <button
+                        type="button"
+                        className="secondary-button bordered"
+                        disabled={isSaving}
+                        onClick={() => setEditingBudget(budget)}
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-button"
+                        disabled={isSaving}
+                        onClick={() => deleteBudget(budget)}
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
-              {eventFinance.budgets.length === 0 && <p>Aucun budget previsionnel.</p>}
+              {budgetList.total === 0 && <p>Aucun budget previsionnel.</p>}
             </div>
+            <PaginationControls
+              listState={budgetListState}
+              onChange={(patch) => setBudgetListState((current) => ({ ...current, ...patch }))}
+              page={budgetList.page}
+              pageCount={budgetList.pageCount}
+              total={budgetList.total}
+            />
           </article>
 
           <article className="settings-card">
@@ -6160,6 +6780,14 @@ function FinanceWorkspacePage({ isAdmin = false }) {
                 <li key={expense.id}>
                   <span>{expense.label}</span>
                   <strong>{formatFcfa(expense.amountFcfa)}</strong>
+                  <button
+                    type="button"
+                    className="danger-button compact-danger"
+                    disabled={isSaving}
+                    onClick={() => deleteExpense(expense)}
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
                 </li>
               ))}
               {eventFinance.expenses.length === 0 && <li>Aucune depense.</li>}
@@ -6197,6 +6825,14 @@ function FinanceWorkspacePage({ isAdmin = false }) {
                   <strong>
                     {formatFcfa(payment.amountFcfa)} - {paymentStatusLabel(payment.status)}
                   </strong>
+                  <button
+                    type="button"
+                    className="danger-button compact-danger"
+                    disabled={isSaving}
+                    onClick={() => deletePayment(payment)}
+                  >
+                    <Trash2 size={15} aria-hidden="true" />
+                  </button>
                 </li>
               ))}
               {eventFinance.payments.length === 0 && <li>Aucun paiement.</li>}
@@ -6252,8 +6888,19 @@ function EventsPage({ user }) {
   const [notice, setNotice] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [eventListState, setEventListState] = useState(defaultListState)
 
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? events[0]
+  const eventList = applyListControls(events, eventListState, {
+    searchGetter: (event) => `${event.title} ${event.location ?? ''} ${event.description ?? ''}`,
+    statusGetter: (event) => event.status,
+    sorters: {
+      recent: (a, b) => new Date(b.updatedAt ?? b.startsAt) - new Date(a.updatedAt ?? a.startsAt),
+      dateAsc: (a, b) => new Date(a.startsAt) - new Date(b.startsAt),
+      dateDesc: (a, b) => new Date(b.startsAt) - new Date(a.startsAt),
+      titleAsc: (a, b) => a.title.localeCompare(b.title),
+    },
+  })
   const canCreateEvent =
     user.roleValues.includes('ADMIN') ||
     user.roleValues.includes('RH') ||
@@ -6374,6 +7021,73 @@ function EventsPage({ user }) {
     try {
       syncSelectedEvent(await api.updateEvent(selectedEvent.id, { status: nextStatus }))
       setNotice('Statut evenement mis a jour.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitEventUpdate = async (event) => {
+    event.preventDefault()
+
+    if (!selectedEvent) {
+      return
+    }
+
+    if (!canManageEvent) {
+      setNotice("Votre role ne permet pas de modifier la fiche evenement.")
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      syncSelectedEvent(
+        await api.updateEvent(selectedEvent.id, {
+          title: getFormValue(formData, 'title'),
+          description: getFormValue(formData, 'description'),
+          location: getFormValue(formData, 'location'),
+          startsAt: getFormValue(formData, 'startsAt'),
+          endsAt: getFormValue(formData, 'endsAt'),
+          budgetFcfa: Number(getFormValue(formData, 'budgetFcfa') || 0),
+          status: getFormValue(formData, 'status') || selectedEvent.status,
+          responsibleId: getFormValue(formData, 'responsibleId'),
+        }),
+      )
+      setNotice('Fiche evenement mise a jour.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const deleteSelectedEvent = async () => {
+    if (!selectedEvent) {
+      return
+    }
+
+    if (!canManageProduction) {
+      setNotice("Seuls l'Admin et la RH peuvent supprimer un evenement.")
+      return
+    }
+
+    if (!window.confirm(`Supprimer definitivement "${selectedEvent.title}" ?`)) {
+      return
+    }
+
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.deleteEvent(selectedEvent.id)
+      const nextEvents = events.filter((event) => event.id !== selectedEvent.id)
+      setEvents(nextEvents)
+      setSelectedEventId(nextEvents[0]?.id ?? '')
+      setNotice('Evenement supprime.')
     } catch (error) {
       setNotice(error.message)
     } finally {
@@ -6658,19 +7372,31 @@ function EventsPage({ user }) {
           <div className="settings-panel-heading">
             <div>
               <p className="eyebrow">Calendrier</p>
-              <h2>{events.length} evenement(s).</h2>
+              <h2>{eventList.total} evenement(s).</h2>
             </div>
             <button type="button" className="secondary-button bordered" onClick={refreshEvents}>
               Actualiser
             </button>
           </div>
+          <ListToolbar
+            listState={eventListState}
+            onChange={(patch) => setEventListState((current) => ({ ...current, ...patch }))}
+            searchPlaceholder="Rechercher par nom, lieu, brief..."
+            statusOptions={eventStatusOptions}
+            sortOptions={[
+              { value: 'recent', label: 'Recents modifies' },
+              { value: 'dateAsc', label: 'Date proche' },
+              { value: 'dateDesc', label: 'Date eloignee' },
+              { value: 'titleAsc', label: 'Nom A-Z' },
+            ]}
+          />
           {isLoading ? (
             <p className="approval-empty">Chargement des evenements...</p>
-          ) : events.length === 0 ? (
+          ) : eventList.total === 0 ? (
             <p className="approval-empty">Aucun evenement cree pour le moment.</p>
           ) : (
             <div className="event-card-list">
-              {events.map((event) => (
+              {eventList.items.map((event) => (
                 <button
                   type="button"
                   className={`event-row-card ${selectedEvent?.id === event.id ? 'active' : ''}`}
@@ -6684,6 +7410,13 @@ function EventsPage({ user }) {
               ))}
             </div>
           )}
+          <PaginationControls
+            listState={eventListState}
+            onChange={(patch) => setEventListState((current) => ({ ...current, ...patch }))}
+            page={eventList.page}
+            pageCount={eventList.pageCount}
+            total={eventList.total}
+          />
         </section>
       </div>
 
@@ -6735,6 +7468,67 @@ function EventsPage({ user }) {
                 <strong>{completionRate}% pret</strong>
               </article>
             </div>
+            {canManageEvent && (
+              <form className="quick-edit-form" onSubmit={submitEventUpdate} key={selectedEvent.id}>
+                <label>
+                  Nom
+                  <input name="title" type="text" defaultValue={selectedEvent.title} required />
+                </label>
+                <label>
+                  Lieu
+                  <input name="location" type="text" defaultValue={selectedEvent.location ?? ''} />
+                </label>
+                <label>
+                  Debut
+                  <input name="startsAt" type="datetime-local" defaultValue={formatDateInput(selectedEvent.startsAt)} required />
+                </label>
+                <label>
+                  Fin
+                  <input name="endsAt" type="datetime-local" defaultValue={formatDateInput(selectedEvent.endsAt)} />
+                </label>
+                <label>
+                  Budget FCFA
+                  <input name="budgetFcfa" type="number" min="0" defaultValue={selectedEvent.budgetFcfa ?? 0} />
+                </label>
+                <label>
+                  Statut
+                  <select name="status" defaultValue={selectedEvent.status}>
+                    {eventStatusOptions.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Responsable
+                  <select name="responsibleId" defaultValue={selectedEvent.responsible?.id ?? ''}>
+                    <option value="">Non defini</option>
+                    {users.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {`${item.lastName} ${item.firstName}`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="wide-field">
+                  Description
+                  <textarea name="description" defaultValue={selectedEvent.description ?? ''} />
+                </label>
+                <div className="form-actions-row">
+                  <button type="submit" className="primary-button" disabled={isSaving}>
+                    <Edit3 size={16} aria-hidden="true" />
+                    Modifier
+                  </button>
+                  {canManageProduction && (
+                    <button type="button" className="danger-button" disabled={isSaving} onClick={deleteSelectedEvent}>
+                      <Trash2 size={16} aria-hidden="true" />
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
           </article>
 
           <article className="settings-card">

@@ -3776,8 +3776,107 @@ button:disabled,
   align-content: start;
 }
 
+.list-toolbar,
+.pagination-controls,
+.form-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+}
+
+.list-toolbar {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #d8edf9;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f7fbff, #ffffff);
+}
+
+.list-toolbar label,
+.pagination-controls label,
+.quick-edit-form label {
+  display: grid;
+  gap: 6px;
+  color: #58708f;
+  font-weight: 850;
+}
+
+.list-toolbar label {
+  flex: 1 1 180px;
+}
+
+.list-toolbar input,
+.list-toolbar select,
+.pagination-controls select,
+.quick-edit-form input,
+.quick-edit-form select,
+.quick-edit-form textarea {
+  min-height: 42px;
+  border: 1px solid #cfe1ef;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #10233f;
+  background: #ffffff;
+  font: inherit;
+}
+
+.pagination-controls {
+  justify-content: space-between;
+  margin-top: 14px;
+  color: #58708f;
+  font-weight: 800;
+}
+
+.pagination-controls > div {
+  display: flex;
+  gap: 8px;
+}
+
+.quick-edit-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px dashed #9fd8f5;
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.quick-edit-form.compact {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.quick-edit-form textarea {
+  min-height: 88px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.quick-edit-form .wide-field,
+.quick-edit-form .form-actions-row {
+  grid-column: 1 / -1;
+}
+
+.form-actions-row {
+  justify-content: flex-start;
+}
+
+.compact-danger {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .business-table > div {
-  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr) auto auto;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(0, 1fr) auto auto minmax(240px, 1.2fr);
 }
 
 .report-filter-form {
