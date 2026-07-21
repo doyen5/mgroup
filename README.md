@@ -216,17 +216,24 @@ La page d'accueil du site reste accessible depuis les boutons `Accueil du site`,
 
 ## Page d'accueil publique
 
-La page d'accueil a ete enrichie pour ressembler a une vraie vitrine professionnelle M Group :
+La page d'accueil a ete retravaillee comme une vitrine sombre et premium inspiree d'un site
+d'agence creative, tout en conservant l'animation et la disposition generale deja en place :
 
-- hero evenementiel avec image plein ecran, navigation, boutons `Lire la suite`, `Voir nos prestations` et `Mon Espace` ;
-- indicateurs rapides : pilotage complet, modules metier, alertes/rappels et budgets FCFA ;
-- section `A propos` avec image, badge visuel et preuves operationnelles ;
-- bande de direction operationnelle : coordination centrale, suivi terrain et tableaux de bord ;
-- grille de prestations : production, coordination artistique, administration, commercial, budget et RH ;
-- section methode : cadrer, planifier, valider, mesurer ;
-- section plateforme : modules Evenements, Finances, RH, Commercial, Documents et Rapports ;
-- section experience terrain et CTA vers l'espace connecte ;
-- footer enrichi avec liens rapides, marque, copyright et credit conception.
+- hero plein ecran avec image evenementielle, voile sombre, grille subtile, navigation et titre fort `Strategie. Creativite. Impact.` ;
+- actions principales : `Demander un devis`, `Nos expertises`, `Mon Espace` et lien WhatsApp ;
+- numero WhatsApp public : `+225 07 49 67 67 67` avec lien `wa.me/2250749676767` ;
+- carte d'impact dans le hero : culture, corporate et activation ;
+- section `Qui sommes-nous ?` avec image, badge premium et phrase de positionnement ;
+- section `4 poles. 1 force.` pour presenter les expertises evenementielles ;
+- bloc `Pourquoi M Group ?` avec acces par role, tracabilite et notifications ;
+- chiffres de confiance : projets suivis, experience terrain, clients accompagnes et rayonnement regional ;
+- methode en 5 etapes : cadrer, planifier, valider, mesurer, capitaliser ;
+- realisations phares avec cartes visuelles animees ;
+- presentation des modules internes : Evenements, Finances, RH, Commercial, Documents et Rapports ;
+- zone partenaires, CTA final et formulaire de demande de devis qui ouvre WhatsApp ;
+- footer sombre avec liens rapides, copyright et credit conception ;
+- bouton WhatsApp flottant en bas a droite ;
+- bouton flottant `Retour en haut` pour revenir rapidement au hero.
 
 ## Parcours Administrateur
 
@@ -349,10 +356,13 @@ Le dashboard Admin contient maintenant :
 - une zone profil avec nom complet, role, photo/avatar et derniere connexion ;
 - une horloge temps reel ;
 - une vue generale interactive avec donnees reelles : inscriptions, evenements, budgets, alertes, workflows, finance et RH ;
+- un titre Admin plus court : `Pilotage Admin.` pour garder la vue lisible ;
+- une bande de priorites Admin : inscriptions a valider, workflows Admin, budgets sensibles et documents a valider ;
 - des cartes statistiques colorees avec icones `lucide-react` ;
-- des panneaux graphiques visuels avec activite evenementielle, budget et montants en FCFA ;
+- des panneaux graphiques visuels avec repartition des statuts evenementiels, budget consomme, paiements en attente et montants en FCFA ;
+- une zone decisionnelle avec activite recente, prochains evenements et synthese de securite Admin ;
 - des actions rapides vers les modules prioritaires ;
-- des pages internes accessibles depuis le menu : Vue generale, Inscriptions, Workflows, Evenements, Commercial, Equipe/RH, Finances, Budget, Documents, Rapports, Alertes et Parametres ;
+- des pages internes accessibles depuis le menu : Vue generale, Inscriptions, Workflows, Evenements, Commercial, Equipe/RH, Tresorerie, Budgets, Documents, Rapports, Alertes et Parametres ;
 - des alertes sonores cote navigateur pour prevenir l'Admin lors des changements importants ;
 - la validation des inscriptions en attente depuis PostgreSQL.
 - une section `Parametres` complete pour le profil, la securite, l'entreprise, les utilisateurs, les preferences, les notifications, les modules et le journal d'activite.
@@ -372,8 +382,8 @@ Workflows
 Evenements
 Commercial
 Equipe / RH
-Finances
-Budget
+Tresorerie
+Budgets
 Documents
 Rapports
 Alertes
@@ -396,8 +406,8 @@ Comptable :
 
 ```txt
 Vue generale
-Finances
-Budget
+Tresorerie
+Budgets
 Documents
 Rapports
 Workflows
@@ -425,20 +435,21 @@ La vue generale n'est plus statique. Elle charge les donnees API selon le role :
 - RH : personnel actif, disponibilites, workflows RH, evenements, documents RH, contrats, missions et alertes ;
 - Commercial : clients, prospects, demandes de prestations, devis, documents commerciaux, rapports et workflows ;
 - Comptable : finances, budgets, documents financiers, rapports, workflows et alertes ;
-- autres profils : vue reduite selon les modules autorises.
+- Secretaire : agenda evenementiel, alertes et parametres ;
+- Client / Autre : vue reduite sans chargement des evenements ou workflows internes.
 
 Les anciens pictogrammes texte du menu ont ete remplaces par des icones `lucide-react`.
 
 Les dashboards ont aussi ete rendus coherents par profil :
 
-- Admin : pilotage global, validations, finance, budget, RH, documents, rapports, alertes et parametres complets ;
+- Admin : pilotage global, validations, tresorerie, budgets, RH, documents, rapports, alertes et parametres complets ;
 - RH : personnel, disponibilites, missions, contrats, documents administratifs, workflows RH, evenements et alertes ;
-- Commercial : clients, prospects, demandes de prestations, devis, pipeline, documents commerciaux, rapports et alertes.
+- Commercial : clients, prospects, demandes de prestations, devis, pipeline, documents commerciaux, rapports et alertes ;
+- Comptable : tresorerie, budgets a chiffrer, paiements, depassements, documents financiers, rapports et alertes.
 
 Les profils futurs sont prevus dans la structure :
 
-- Secretaire : agenda, documents administratifs, evenements et suivi operationnel ;
-- Comptable : budgets, paiements, factures, recus, rapports financiers et alertes budget ;
+- Secretaire : agenda, evenements et suivi operationnel ;
 - Client : suivi des demandes, documents partages, devis/factures et historique des prestations ;
 - Autre : acces restreint selon les modules que l'Admin activera.
 
@@ -586,12 +597,14 @@ La priorite evenementielle ajoute un vrai module `Evenements` connecte au backen
 Fonctionnalites disponibles :
 
 - creation d'un evenement avec titre, description, lieu, dates, budget FCFA, statut et responsable ;
+- champs metier supplementaires : type d'evenement, public cible, jauge attendue, mode d'acces, besoins production et risques/contraintes ;
 - planning de production par evenement ;
 - affectation de responsables ou collaborateurs ;
 - checklist avant evenement avec cases a cocher ;
 - statuts : `DRAFT`, `IN_PREPARATION`, `VALIDATED`, `COMPLETED`, `CANCELLED` ;
 - calendrier/liste des evenements dans le dashboard ;
-- pieces jointes : contrats, fiches techniques, devis, photos ou autre document.
+- pieces jointes : contrats, fiches techniques, devis, photos ou autre document ;
+- droits par profil : Commercial/Secretaire peuvent creer un evenement, RH/Admin gerent production, affectations et checklist, Commercial/Comptable peuvent joindre des pieces utiles.
 
 Le frontend utilise maintenant la page `Evenements` du dashboard au lieu des donnees statiques. Les pieces jointes peuvent etre ajoutees par lien ou fichier local converti en Data URL pour le prototype. En production, il faudra remplacer les Data URLs par un stockage fichier reel.
 
@@ -611,11 +624,13 @@ Fonctionnalites disponibles :
 
 - budget previsionnel par evenement ;
 - validation ou rejet des budgets par l'Admin ;
-- depenses reelles par categorie, prestataire et date ;
-- suivi des paiements avec statuts `PENDING`, `PARTIAL`, `PAID`, `OVERDUE`, `CANCELLED` ;
+- budget enrichi avec categorie, centre de cout, marge de securite, justification et notes ;
+- depenses reelles par categorie, prestataire, date, reference piece, mode de paiement et responsable de validation ;
+- suivi des paiements avec statuts `PENDING`, `PARTIAL`, `PAID`, `OVERDUE`, `CANCELLED`, beneficiaire, compte/numero, reference et condition de paiement ;
 - documents financiers : devis, factures, recus et autres documents ;
 - totaux globaux en FCFA ;
 - alertes quand les depenses reelles depassent la limite prevue ou validee.
+- le Comptable saisit et suit les budgets ; seule la validation/rejet reste visible et autorisee pour l'Admin.
 
 La limite budgetaire utilisee par l'alerte est calculee dans cet ordre :
 
@@ -639,6 +654,8 @@ La priorite workflow ajoute une chaine de validation adaptee a M Group :
 - la `RH` affecte les responsables ou collaborateurs ;
 - l'`Admin` valide ou refuse la demande ;
 - chaque etape est historisee dans le journal du workflow et dans le journal d'activite global.
+
+Le formulaire de creation de workflow garde maintenant un brief plus exploitable : priorite, impact budget, besoin RH, livrable attendu, echeance souhaitee et description courte.
 
 Statuts workflow :
 
@@ -709,9 +726,10 @@ Fonctionnalites disponibles :
 - liste du personnel actif ;
 - roles internes et departements ;
 - disponibilite : disponible, occupe, indisponible, en conge ;
-- contrats avec type, statut, dates, montant FCFA et fichier ;
+- profil RH enrichi avec competences fortes, mobilite, missions preferees, certifications/habilitations, contact d'urgence et date d'embauche ;
+- contrats avec type, statut, dates, montant FCFA, reference, cycle de paiement, avantages/primes, clause sensible et fichier ;
 - documents administratifs : piece d'identite, contrat, CV, attestation, administratif ou autre ;
-- affectation aux evenements via missions RH ;
+- affectation aux evenements via missions RH avec lieu, heure de convocation, materiel attendu et contact terrain ;
 - historique des missions et affectations evenementielles existantes.
 
 Le profil `RH` ouvre directement la page `Equipe et RH` apres connexion. Cette page utilise
@@ -739,14 +757,18 @@ Tables ajoutees :
 
 ## Module commercial / clients
 
-La priorite commerciale ajoute un module `Commercial` accessible aux roles `ADMIN`,
-`COMMERCIAL` et `COMPTABLE`.
+La priorite commerciale ajoute un module `Commercial` accessible en lecture aux roles `ADMIN`,
+`COMMERCIAL` et `COMPTABLE`. Les creations et modifications commerciales sont reservees aux roles
+`ADMIN` et `COMMERCIAL`.
 
 Fonctionnalites disponibles :
 
 - gestion des clients et prospects ;
 - demande de prestation rattachee a un client et optionnellement a un evenement ;
+- clients/prospects enrichis avec type client, secteur, email facturation, informations fiscales et canal prioritaire ;
+- demandes de prestation enrichies avec type de prestation, lieu souhaite, jauge, priorite, decisionnaire et contraintes techniques ;
 - devis commerciaux numerotes automatiquement (`MG-annee-numero`) ;
+- formulaire de devis complet pour l'evenementiel : contact devis, reference client, type de prestation, date, lieu, jauge, lignes de prestation, TVA, remise, acompte, livrables, logistique, exclusions, validite et conditions de paiement ;
 - suivi du pipeline avec statuts `NEW`, `IN_DISCUSSION`, `WON`, `LOST` ;
 - suivi des demandes avec statuts `NEW`, `IN_DISCUSSION`, `QUOTED`, `WON`, `LOST`, `CANCELLED` ;
 - suivi des devis avec statuts `DRAFT`, `SENT`, `ACCEPTED`, `REJECTED`, `EXPIRED` ;
@@ -786,7 +808,11 @@ Fonctionnalites disponibles :
 - classement par entreprise, evenement, client ou utilisateur ;
 - types : devis, facture, recu, contrat, fiche technique, photo, administratif, rapport ou autre ;
 - statuts : brouillon, a valider, valide, rejete, signe, archive ;
+- formulaires harmonises avec confidentialite, version, responsable document, validation attendue, objet commercial, conditions de paiement, delai de validite et signataire attendu ;
 - generation prototype de PDF avec modele M Group et logo inclus ;
+- ouverture des PDF generes via une structure PDF complete compatible navigateur ;
+- reconstruction automatique des anciens PDF generes quand la liste documentaire est rechargee ;
+- bouton `Ouvrir` fiabilise cote frontend : les Data URLs et PDF generes sont transformes en `Blob URL` avant ouverture ;
 - validation ou rejet interne reserve a l'Admin ;
 - notifications Admin quand un document attend validation.
 
@@ -1143,6 +1169,10 @@ Deja en place :
 - CORS configure pour Vite en local ;
 - validation stricte des payloads ;
 - controle d'acces par role ;
+- routes Evenements limitees aux profils operationnels `ADMIN`, `RH`, `COMMERCIAL`, `COMPTABLE` et `SECRETAIRE` ;
+- routes Workflows limitees aux profils `ADMIN`, `RH`, `COMMERCIAL` et `COMPTABLE` ;
+- routes Finance limitees aux profils `ADMIN` et `COMPTABLE`, avec validation/rejet budget reserve a l'Admin ;
+- ecritures commerciales limitees aux profils `ADMIN` et `COMMERCIAL`, avec lecture commerciale possible pour le Comptable ;
 - audit login/register/validation/changement de role ;
 - audit des modifications du profil connecte ;
 - audit des modifications entreprise ;
@@ -1290,7 +1320,8 @@ Les routes `/api/auth/sessions`, `/api/auth/login-history`, `/api/auth/2fa/setup
 `/api/reports/*`, `/api/setup/company` et `PATCH /api/setup/company`
 demandent une session connectee valide. Les routes entreprise, la configuration 2FA, la
 validation/rejet de budgets, la validation documentaire, la decision finale des workflows et les rappels evenement sont
-reserves au role `ADMIN`.
+reserves au role `ADMIN`. Les routes Evenements, Workflows, Finance et Commercial appliquent aussi un filtrage par metier
+pour bloquer les profils qui n'ont pas besoin de ces donnees.
 
 Etat actuel de la base de test au moment de la derniere verification :
 

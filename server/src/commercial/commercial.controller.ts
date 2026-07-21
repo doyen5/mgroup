@@ -34,11 +34,13 @@ export class CommercialController {
   }
 
   @Post('clients')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   createClient(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateClientDto) {
     return this.commercial.createClient(user, dto);
   }
 
   @Patch('clients/:clientId')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   updateClient(
     @Param('clientId') clientId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -48,11 +50,13 @@ export class CommercialController {
   }
 
   @Post('requests')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   createRequest(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateServiceRequestDto) {
     return this.commercial.createRequest(user, dto);
   }
 
   @Patch('requests/:requestId')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   updateRequest(
     @Param('requestId') requestId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -62,11 +66,13 @@ export class CommercialController {
   }
 
   @Post('quotes')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   createQuote(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateQuoteDto) {
     return this.commercial.createQuote(user, dto);
   }
 
   @Patch('quotes/:quoteId')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   updateQuote(
     @Param('quoteId') quoteId: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -76,6 +82,7 @@ export class CommercialController {
   }
 
   @Post('exchanges')
+  @Roles(RoleName.ADMIN, RoleName.COMMERCIAL)
   createExchange(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateExchangeDto) {
     return this.commercial.createExchange(user, dto);
   }

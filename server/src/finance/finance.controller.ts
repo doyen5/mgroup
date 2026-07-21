@@ -16,6 +16,7 @@ import {
 import { FinanceService } from './finance.service';
 
 @UseGuards(JwtAuthGuard)
+@Roles(RoleName.ADMIN, RoleName.COMPTABLE)
 @Controller('finance')
 export class FinanceController {
   constructor(private readonly finance: FinanceService) {}

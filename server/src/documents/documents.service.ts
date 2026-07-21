@@ -23,7 +23,9 @@ const documentInclude = {
   subjectUser: { select: { id: true, firstName: true, lastName: true, email: true } },
   uploadedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
   validatedBy: { select: { id: true, firstName: true, lastName: true, email: true } },
-};
+} as const;
+
+type BusinessDocumentRecord = Prisma.BusinessDocumentGetPayload<{ include: typeof documentInclude }>;
 
 @Injectable()
 export class DocumentsService {
@@ -57,11 +59,13 @@ export class DocumentsService {
   }
 
   async list() {
-    return this.prisma.businessDocument.findMany({
+    const documents = await this.prisma.businessDocument.findMany({
       include: documentInclude,
       orderBy: { createdAt: 'desc' },
       take: 150,
     });
+
+    return documents.map((document) => this.withOpenableGeneratedPdf(document));
   }
 
   async create(user: AuthenticatedUser, dto: CreateBusinessDocumentDto) {
@@ -170,22 +174,123 @@ export class DocumentsService {
       .join('\n');
   }
 
-  private toPdfDataUrl(content: string) {
-    // PDF minimal compatible prototype : le stockage reel viendra avec un service de generation PDF dedie.
-    const escaped = content.replace(/[()\\]/g, '\\$&').replace(/\r?\n/g, ') Tj 0 -16 Td (');
-    const stream = `BT /F1 12 Tf 40 760 Td (${escaped}) Tj ET`;
-    const pdf = `%PDF-1.4
-1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
-2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
-3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
-4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
-5 0 obj << /Length ${stream.length} >> stream
-${stream}
-endstream endobj
-trailer << /Root 1 0 R >>
-%%EOF`;
+  private buildStoredDocumentText(document: BusinessDocumentRecord) {
+    return [
+      document.company?.name ?? 'M Group',
+      `Document : ${document.label}`,
+      `Type : ${document.type}`,
+      `Statut : ${document.status}`,
+      `Modele : ${document.templateName ?? 'Modele M Group avec logo'}`,
+      document.client ? `Client : ${document.client.name}` : '',
+      document.event ? `Evenement : ${document.event.title}` : '',
+      document.subjectUser ? `Utilisateur : ${document.subjectUser.lastName} ${document.subjectUser.firstName}` : '',
+      document.notes ? `Notes : ${document.notes}` : '',
+      document.company?.documentFooter ?? 'Document genere par M Group.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
 
-    return `data:application/pdf;base64,${Buffer.from(pdf).toString('base64')}`;
+  private withOpenableGeneratedPdf(document: BusinessDocumentRecord) {
+    const isGeneratedPdf =
+      document.mimeType === 'application/pdf' &&
+      document.templateName &&
+      document.url.startsWith('data:application/pdf');
+
+    if (!isGeneratedPdf) {
+      return document;
+    }
+
+    // Les anciens documents generes etaient des PDF trop minimaux pour certains navigateurs.
+    // On renvoie donc une URL PDF reconstruite avec une structure PDF complete.
+    return {
+      ...document,
+      url: this.toPdfDataUrl(this.buildStoredDocumentText(document)),
+    };
+  }
+
+  private toPdfDataUrl(content: string) {
+    return `data:application/pdf;base64,${this.toPdfBuffer(content).toString('base64')}`;
+  }
+
+  private toPdfBuffer(content: string) {
+    const lines = this.toPdfLines(content);
+    const textCommands = lines
+      .map((line, index) => `${index === 0 ? '' : 'T* '}(${this.escapePdfText(line)}) Tj`)
+      .join('\n');
+    const stream = `BT
+/F1 12 Tf
+40 780 Td
+16 TL
+${textCommands}
+ET`;
+    const objects = [
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+      `<< /Length ${Buffer.byteLength(stream, 'ascii')} >>
+stream
+${stream}
+endstream`,
+    ];
+    let pdf = '%PDF-1.4\n';
+    const objectOffsets: number[] = [];
+
+    objects.forEach((body, index) => {
+      objectOffsets.push(Buffer.byteLength(pdf, 'ascii'));
+      pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+    });
+
+    const xrefOffset = Buffer.byteLength(pdf, 'ascii');
+    const xrefEntries = objectOffsets
+      .map((offset) => `${String(offset).padStart(10, '0')} 00000 n `)
+      .join('\n');
+    pdf += `xref
+0 ${objects.length + 1}
+0000000000 65535 f 
+${xrefEntries}
+trailer
+<< /Size ${objects.length + 1} /Root 1 0 R >>
+startxref
+${xrefOffset}
+%%EOF
+`;
+
+    return Buffer.from(pdf, 'ascii');
+  }
+
+  private toPdfLines(content: string) {
+    return content
+      .split(/\r?\n/)
+      .flatMap((line) => {
+        const safeLine = this.toPdfSafeText(line);
+
+        if (safeLine.length <= 88) {
+          return [safeLine || ' '];
+        }
+
+        const chunks: string[] = [];
+        for (let index = 0; index < safeLine.length; index += 88) {
+          chunks.push(safeLine.slice(index, index + 88));
+        }
+
+        return chunks;
+      })
+      .slice(0, 42);
+  }
+
+  private toPdfSafeText(value: string) {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\x20-\x7E]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private escapePdfText(value: string) {
+    return this.toPdfSafeText(value).replace(/[()\\]/g, '\\$&');
   }
 
   private async ensureScopeTarget(

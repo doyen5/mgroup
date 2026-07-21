@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  ArrowUp,
   Banknote,
   Bell,
   Building2,
@@ -308,9 +309,9 @@ const dashboardPanelCatalog = {
   workflows: { label: 'Workflows', icon: Layers },
   events: { label: 'Evenements', icon: CalendarDays },
   commercial: { label: 'Commercial', icon: UserPlus },
-  finance: { label: 'Finances', icon: Wallet },
+  finance: { label: 'Tresorerie', icon: Wallet },
   team: { label: 'Equipe / RH', icon: Users },
-  budget: { label: 'Budget', icon: Banknote },
+  budget: { label: 'Budgets', icon: Banknote },
   documents: { label: 'Documents', icon: FileText },
   reports: { label: 'Rapports', icon: Activity },
   alerts: { label: 'Alertes', icon: Bell },
@@ -347,7 +348,11 @@ const getDashboardPanelIds = (roleValues) => {
     return ['overview', 'commercial', 'workflows', 'events', 'documents', 'reports', 'alerts', 'settings']
   }
 
-  return ['overview', 'events', 'alerts', 'settings']
+  if (roleValues.includes('SECRETAIRE')) {
+    return ['overview', 'events', 'alerts', 'settings']
+  }
+
+  return ['overview', 'alerts', 'settings']
 }
 
 // Formatage unique pour l'horloge, le toast et la derniere connexion.
@@ -422,8 +427,141 @@ const businessDocumentStatusLabel = (status) =>
 const userDisplayName = (user) =>
   `${user?.lastName ?? ''} ${user?.firstName ?? ''}`.trim() || user?.email || 'Utilisateur'
 
+const openBlobInNewTab = (blob) => {
+  const blobUrl = URL.createObjectURL(blob)
+  const openedWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer')
+
+  if (!openedWindow) {
+    URL.revokeObjectURL(blobUrl)
+    throw new Error("Le navigateur a bloque l'ouverture du document.")
+  }
+
+  // Le delai laisse au lecteur PDF du navigateur le temps de charger le fichier temporaire.
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+}
+
+const dataUrlToBlob = (dataUrl) => {
+  const [metadata, encodedContent = ''] = dataUrl.split(',')
+  const mimeType = metadata.match(/^data:([^;,]+)/)?.[1] ?? 'application/octet-stream'
+  const isBase64 = metadata.includes(';base64')
+  const binaryContent = isBase64 ? window.atob(encodedContent) : decodeURIComponent(encodedContent)
+  const bytes = new Uint8Array(binaryContent.length)
+
+  for (let index = 0; index < binaryContent.length; index += 1) {
+    bytes[index] = binaryContent.charCodeAt(index)
+  }
+
+  return new Blob([bytes], { type: mimeType })
+}
+
+const toPdfSafeText = (value) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+const escapePdfText = (value) => toPdfSafeText(value).replace(/[()\\]/g, '\\$&')
+
+const toPdfLines = (content) =>
+  content
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      const safeLine = toPdfSafeText(line)
+
+      if (safeLine.length <= 88) {
+        return [safeLine || ' ']
+      }
+
+      const chunks = []
+      for (let index = 0; index < safeLine.length; index += 88) {
+        chunks.push(safeLine.slice(index, index + 88))
+      }
+
+      return chunks
+    })
+    .slice(0, 42)
+
+const buildPdfBlob = (content) => {
+  // PDF prototype complet : table xref et startxref pour que Edge/Chrome ouvrent le fichier sans page blanche.
+  const textCommands = toPdfLines(content)
+    .map((line, index) => `${index === 0 ? '' : 'T* '}(${escapePdfText(line)}) Tj`)
+    .join('\n')
+  const stream = `BT
+/F1 12 Tf
+40 780 Td
+16 TL
+${textCommands}
+ET`
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${stream.length} >>
+stream
+${stream}
+endstream`,
+  ]
+  let pdf = '%PDF-1.4\n'
+  const objectOffsets = []
+
+  objects.forEach((body, index) => {
+    objectOffsets.push(pdf.length)
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`
+  })
+
+  const xrefOffset = pdf.length
+  const xrefEntries = objectOffsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n `).join('\n')
+  pdf += `xref
+0 ${objects.length + 1}
+0000000000 65535 f 
+${xrefEntries}
+trailer
+<< /Size ${objects.length + 1} /Root 1 0 R >>
+startxref
+${xrefOffset}
+%%EOF
+`
+
+  return new Blob([pdf], { type: 'application/pdf' })
+}
+
+const buildBusinessDocumentPdfBlob = (document) => {
+  const content = [
+    document.company?.name ?? 'M Group',
+    `Document : ${document.label}`,
+    `Type : ${businessDocumentTypeLabel(document.type)}`,
+    `Statut : ${businessDocumentStatusLabel(document.status)}`,
+    `Cible : ${documentScopeLabel(document.scope)}`,
+    `Modele : ${document.templateName ?? 'Modele M Group avec logo'}`,
+    document.client ? `Client : ${document.client.name}` : '',
+    document.event ? `Evenement : ${document.event.title}` : '',
+    document.subjectUser ? `Utilisateur : ${userDisplayName(document.subjectUser)}` : '',
+    document.notes ? `Notes : ${document.notes}` : '',
+    document.company?.documentFooter ?? 'Document genere par M Group.',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  return buildPdfBlob(content)
+}
+
 // Lecture securisee d'un champ de formulaire HTML.
 const getFormValue = (formData, name) => String(formData.get(name) ?? '').trim()
+
+const buildStructuredNotes = (formData, baseFieldName, fields) => {
+  const baseText = getFormValue(formData, baseFieldName)
+  const details = fields
+    .map(({ label, name, suffix = '' }) => {
+      const value = getFormValue(formData, name)
+      return value ? `${label} : ${value}${suffix}` : ''
+    })
+    .filter(Boolean)
+
+  return [baseText, details.length ? `Details metier\n${details.join('\n')}` : ''].filter(Boolean).join('\n\n')
+}
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
@@ -535,12 +673,13 @@ const normalizeInterfacePreferences = (preferences) => ({
 const interfaceLabels = {
   fr: {
     alerts: 'Alertes',
-    budget: 'Budget',
+    budget: 'Budgets',
     commercial: 'Commercial',
+    overview: 'Vue generale',
     dashboard: 'Vue generale',
     documents: 'Documents',
     events: 'Evenements',
-    finance: 'Finances',
+    finance: 'Tresorerie',
     home: 'Accueil du site',
     logout: 'Deconnexion',
     reports: 'Rapports',
@@ -553,12 +692,13 @@ const interfaceLabels = {
   },
   en: {
     alerts: 'Alerts',
-    budget: 'Budget',
+    budget: 'Budgets',
     commercial: 'Sales',
+    overview: 'Overview',
     dashboard: 'Overview',
     documents: 'Documents',
     events: 'Events',
-    finance: 'Finance',
+    finance: 'Treasury',
     home: 'Public site',
     logout: 'Logout',
     reports: 'Reports',
@@ -580,6 +720,17 @@ const formatDashboardDateTime = (date, preferences = defaultInterfacePreferences
     timeStyle: 'medium',
     timeZone: preferences.timezone,
   }).format(date)
+
+const formatDashboardDate = (date, preferences = defaultInterfacePreferences) =>
+  new Intl.DateTimeFormat(preferences.language === 'en' ? 'en-US' : 'fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    timeZone: preferences.timezone,
+  }).format(date)
+
+const clampPercent = (value) => Math.max(0, Math.min(100, Math.round(value)))
+
+const dateFromValue = (value) => (value ? new Date(value) : null)
 
 const defaultAdminSettings = {
   display: {
@@ -1072,16 +1223,16 @@ function App() {
   const confirmLogout = async () => {
     setIsLogoutConfirmOpen(false)
     setShowLoginToast(false)
-
-    try {
-      await api.logout()
-    } catch {
-      // Meme si le token est deja expire, l'interface doit quitter la session locale.
-    }
-
     setActiveUser(null)
+    setTwoFactorChallenge(null)
     setInterfacePreferences(defaultInterfacePreferences)
     goLogin('Vous avez ete deconnecte. Reconnectez-vous pour acceder a votre espace.')
+
+    // La deconnexion est optimiste cote interface : le formulaire s'affiche tout de suite,
+    // puis le backend nettoie les cookies et le refresh token sans bloquer l'utilisateur.
+    api.logout().catch(() => {
+      // Meme si le token est deja expire, la session locale est deja fermee.
+    })
   }
 
   return (
@@ -1220,48 +1371,90 @@ function GatewayView({ notice, onAdmin, onOther }) {
 }
 
 function HomeView({ onOpenAuth }) {
+  const whatsappNumber = '2250749676767'
+  const whatsappDisplay = '+225 07 49 67 67 67'
+  const whatsappMessage = encodeURIComponent(
+    "Bonjour M Group, je souhaite echanger avec vous pour une prestation evenementielle.",
+  )
+  const whatsappHref = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`
+  const publicStats = homeStats.map((stat, index) => {
+    const refinedStats = [
+      { value: '200+', label: 'Projets suivis' },
+      { value: '15 ans', label: "D'experience terrain" },
+      { value: '50+', label: 'Clients accompagnes' },
+      { value: '8 pays', label: 'Rayonnement regional' },
+    ]
+
+    return { ...stat, ...refinedStats[index] }
+  })
+  const methodSteps = [
+    ...processSteps,
+    {
+      title: 'Capitaliser',
+      text: 'Transformer chaque projet en rapports, preuves, budget final et apprentissages.',
+      icon: Trophy,
+    },
+  ]
+
+  const openQuoteWhatsApp = (event) => {
+    event.preventDefault()
+    window.open(whatsappHref, '_blank', 'noopener,noreferrer')
+  }
+
   return (
-    <>
+    <div className="public-home">
       {/* Page d'accueil finale accessible quand le setup initial n'est plus requis. */}
-      <section className="hero-section" aria-label="Accueil M Group">
+      <section className="hero-section public-hero" aria-label="Accueil M Group">
         <img className="hero-bg" src={heroImage} alt="" />
         <div className="hero-overlay"></div>
+        <div className="home-grid-surface" aria-hidden="true"></div>
 
-        <header className="topbar" aria-label="Navigation principale">
+        <header className="topbar public-topbar" aria-label="Navigation principale">
           <a className="brand" href="#accueil" aria-label="Retour a l'accueil">
             <span className="brand-mark">M</span>
             <span>M Group</span>
           </a>
           <nav className="home-nav" aria-label="Navigation accueil">
             <a href="#apropos">A propos</a>
-            <a href="#prestations">Prestations</a>
+            <a href="#prestations">Expertises</a>
+            <a href="#realisations">Realisations</a>
             <a href="#methode">Methode</a>
-            <a href="#plateforme">Plateforme</a>
+            <a href="#contact">Contact</a>
           </nav>
           <div className="nav-actions">
-            <button type="button" className="primary-button" onClick={onOpenAuth}>
+            <a className="dark-ghost-button" href={whatsappHref} target="_blank" rel="noreferrer">
+              WhatsApp
+            </a>
+            <button type="button" className="quote-button" onClick={onOpenAuth}>
               Mon Espace
             </button>
           </div>
         </header>
 
-        <div id="accueil" className="hero-content">
-          <p className="eyebrow">Gestion evenementielle premium</p>
-          <h1>M Group pilote ses evenements avec precision.</h1>
+        <div id="accueil" className="hero-content public-hero-content">
+          <p className="eyebrow hero-kicker">Agence de strategie, production et impact culturel</p>
+          <h1>
+            Strategie.
+            <br />
+            Creativite.
+            <br />
+            <span>Impact.</span>
+          </h1>
           <p className="hero-copy">
-            Une plateforme interne pour coordonner les productions, les finances, les ressources
-            humaines et les validations autour des projets de Molare.
+            M Group transforme les projets de Molare et de ses partenaires en experiences
+            structurees : idees, equipes, budgets, documents, validations et resultats restent sous
+            controle.
           </p>
           <div className="hero-actions">
-            <a className="primary-button large" href="#apropos">
-              Lire la suite
+            <a className="quote-button large" href="#contact">
+              Demander un devis
             </a>
-            <a className="secondary-button large" href="#prestations">
-              Voir nos prestations
+            <a className="dark-ghost-button large" href="#prestations">
+              Nos expertises
             </a>
           </div>
           <div className="hero-stat-strip" aria-label="Indicateurs M Group">
-            {homeStats.map((stat) => {
+            {publicStats.map((stat) => {
               const Icon = stat.icon
 
               return (
@@ -1274,46 +1467,51 @@ function HomeView({ onOpenAuth }) {
             })}
           </div>
         </div>
+
+        <aside className="hero-impact-card" aria-label="Synthese M Group">
+          <span className="impact-tag">M Group OS</span>
+          <h2>Idee claire. Equipe alignee. Execution maitrisee.</h2>
+          <p>
+            Une vitrine publique et un espace interne pour coordonner les decisions, les budgets et
+            les livrables sensibles.
+          </p>
+          <div className="impact-tags">
+            <span>Culture</span>
+            <span>Corporate</span>
+            <span>Activation</span>
+          </div>
+        </aside>
       </section>
 
-      <section id="apropos" className="about-section">
-        <div className="about-media enhanced-media">
+      <section id="apropos" className="about-section public-about">
+        <div className="about-media enhanced-media public-media-card">
           <img src={heroImage} alt="Equipe M Group en preparation evenementielle" />
           <div className="media-badge">
             <Sparkles size={18} aria-hidden="true" />
-            <span>Experience premium</span>
+            <span>Premium execution</span>
           </div>
         </div>
         <div className="about-content">
-          <p className="eyebrow">A Propos</p>
-          <h2>M Group, une structure au service de l'experience evenementielle.</h2>
+          <p className="eyebrow">Qui sommes-nous ?</p>
+          <h2>
+            Un groupe concu <span>pour l'impact</span>.
+          </h2>
           <p>
-            Autour de Molare, M Group coordonne des projets qui demandent precision, vitesse
-            d'execution et sens du detail.
+            M Group accompagne les projets qui demandent autant de creativite que de rigueur :
+            evenements, relations partenaires, production terrain, suivi financier et memoire
+            operationnelle.
           </p>
           <p>
-            L'objectif est simple : mieux organiser les prestations, securiser les acces, suivre les
-            budgets et garder une memoire fiable de chaque evenement.
+            L'approche est directe : clarifier le besoin, mobiliser les bonnes ressources, securiser
+            les validations et mesurer ce qui compte apres chaque action.
           </p>
-          <div className="about-proof-grid" aria-label="Forces operationnelles">
-            {trustItems.map((item) => {
-              const Icon = item.icon
-
-              return (
-                <article key={item.title}>
-                  <Icon size={19} aria-hidden="true" />
-                  <strong>{item.title}</strong>
-                  <span>{item.text}</span>
-                </article>
-              )
-            })}
-          </div>
+          <p className="statement-line">Penser haut. Faire juste. Executer fort.</p>
         </div>
       </section>
 
-      <section className="experience-band" aria-label="Experience evenementielle">
+      <section className="experience-band why-section" aria-label="Experience evenementielle">
         <div>
-          <p className="eyebrow">Direction operationnelle</p>
+          <p className="eyebrow">Pourquoi M Group ?</p>
           <h2>Une organisation lisible avant, pendant et apres chaque projet.</h2>
         </div>
         <div className="experience-grid">
@@ -1335,19 +1533,22 @@ function HomeView({ onOpenAuth }) {
         </div>
       </section>
 
-      <section id="prestations" className="content-section">
-        <div className="section-heading">
-          <p className="eyebrow">Nos prestations</p>
-          <h2>Des services structures pour l'evenementiel.</h2>
+      <section id="prestations" className="content-section public-section">
+        <div className="section-heading public-heading">
+          <p className="eyebrow">Nos expertises</p>
+          <h2>
+            4 poles. <span>1 force.</span>
+          </h2>
           <p>
-            Chaque prestation doit etre lisible, suivie et validee avec les bons outils pour garder
-            un haut niveau de qualite.
+            Chaque pole repond a un besoin concret du secteur evenementiel : produire, coordonner,
+            vendre, suivre et prouver.
           </p>
         </div>
 
-        <div className="feature-grid">
-          {features.map((feature) => (
+        <div className="feature-grid public-feature-grid">
+          {features.slice(0, 4).map((feature, index) => (
             <article className="feature-card" key={feature.title}>
+              <span className="feature-index">{String(index + 1).padStart(2, '0')}</span>
               <div className="feature-media">
                 <img src={heroImage} alt="" />
               </div>
@@ -1363,17 +1564,64 @@ function HomeView({ onOpenAuth }) {
         </div>
       </section>
 
-      <section id="methode" className="process-section">
-        <div className="section-heading left">
-          <p className="eyebrow">Methode M Group</p>
-          <h2>Un cycle de production clair, du brief au rapport final.</h2>
+      <section className="trust-section" aria-label="Pourquoi M Group">
+        <div className="trust-list">
+          {trustItems.map((item) => {
+            const Icon = item.icon
+
+            return (
+              <article key={item.title}>
+                <Icon size={20} aria-hidden="true" />
+                <div>
+                  <strong>{item.title}</strong>
+                  <p>{item.text}</p>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+        <div className="mission-card">
+          <p className="eyebrow">Notre mission</p>
+          <h2>
+            Votre ambition.
+            <br />
+            <span>Notre mission.</span>
+          </h2>
+          <p>
+            Combiner vision artistique, discipline operationnelle et outils digitaux pour garder
+            chaque projet lisible jusqu'a la validation finale.
+          </p>
+          <a className="quote-button" href="#contact">
+            Demander un projet
+          </a>
+        </div>
+      </section>
+
+      <section className="numbers-section" aria-label="L'excellence en chiffres">
+        <p className="eyebrow">L'excellence en chiffres</p>
+        <div className="numbers-grid">
+          {publicStats.map((stat) => (
+            <article key={stat.label}>
+              <strong>{stat.value}</strong>
+              <span>{stat.label}</span>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="methode" className="process-section public-process">
+        <div className="section-heading left public-heading">
+          <p className="eyebrow">Notre methodologie</p>
+          <h2>
+            Une execution claire, du brief <span>au rapport final</span>.
+          </h2>
           <p>
             Chaque action importante est preparee, attribuee, validee puis historisee pour garder
             un niveau d'execution professionnel.
           </p>
         </div>
-        <div className="process-grid">
-          {processSteps.map((step, index) => {
+        <div className="process-grid public-process-grid">
+          {methodSteps.map((step, index) => {
             const Icon = step.icon
 
             return (
@@ -1391,12 +1639,14 @@ function HomeView({ onOpenAuth }) {
       <section id="plateforme" className="platform-section">
         <div className="platform-copy">
           <p className="eyebrow">Plateforme interne</p>
-          <h2>Des modules adaptes a chaque metier.</h2>
+          <h2>
+            Les dashboards gardent chaque metier <span>dans son role</span>.
+          </h2>
           <p>
             L'application est pensee pour que chaque profil travaille vite : l'Admin controle,
             la RH affecte, le Commercial suit les clients, le Comptable pilote les budgets.
           </p>
-          <button type="button" className="primary-button large" onClick={onOpenAuth}>
+          <button type="button" className="quote-button large" onClick={onOpenAuth}>
             Acceder a Mon Espace
             <ArrowRight size={18} aria-hidden="true" />
           </button>
@@ -1413,6 +1663,35 @@ function HomeView({ onOpenAuth }) {
               </article>
             )
           })}
+        </div>
+      </section>
+
+      <section id="realisations" className="realisations-section">
+        <div className="section-heading left public-heading">
+          <p className="eyebrow">Realisations phares</p>
+          <h2>
+            Des missions qui combinent terrain, image <span>et resultats</span>.
+          </h2>
+        </div>
+        <div className="achievement-grid">
+          {[
+            ['Production', 'Show live et activation de marque', 'Coordination artistique, technique et protocolaire pour une experience premium.'],
+            ['Corporate', 'Ceremonie institutionnelle', 'Pilotage des invites, documents, prestataires et validations sensibles.'],
+            ['Business', 'Campagne partenaire', 'Suivi des prospects, devis, relances et reporting de performance.'],
+            ['RH', 'Equipe terrain', 'Affectations, disponibilites, contrats et historique des missions.'],
+            ['Finance', 'Budget evenement', 'Previsionnel, depenses reelles, paiements et alertes de depassement.'],
+          ].map(([category, title, text], index) => (
+            <article key={title} className={index === 0 ? 'featured' : undefined}>
+              <div className="achievement-visual">
+                <img src={heroImage} alt="" />
+                <span>{category}</span>
+              </div>
+              <div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 
@@ -1433,31 +1712,114 @@ function HomeView({ onOpenAuth }) {
         </article>
       </section>
 
-      <section id="contact" className="split-section access-section">
+      <section className="partners-section" aria-label="Partenaires">
+        <p className="eyebrow">Avec qui nous travaillons</p>
+        <h2>
+          Nos <span>partenaires</span>
+        </h2>
         <div>
-          <p className="eyebrow">Acces securise</p>
-          <h2>Connexion, inscription et droits adaptes.</h2>
-        </div>
-        <div className="access-actions">
-          <p>
-            Les nouveaux utilisateurs peuvent demander un compte, mais seul l'administrateur
-            attribue un role et confirme l'inscription.
-          </p>
-          <button type="button" className="primary-button large" onClick={onOpenAuth}>
-            Ouvrir Mon Espace
-          </button>
+          <span>Marques</span>
+          <span>Artistes</span>
+          <span>Institutions</span>
+          <span>Medias</span>
+          <span>Prestataires</span>
+          <span>Communautes</span>
         </div>
       </section>
 
-      <footer className="footer">
+      <section className="public-cta">
+        <h2>
+          Construisons quelque chose
+          <br />
+          <span>de grand.</span>
+        </h2>
+        <p>
+          Votre projet merite une preparation a la hauteur de votre ambition. Parlons-nous des
+          objectifs, des contraintes et du resultat attendu.
+        </p>
+        <div>
+          <a className="quote-button large" href="#contact">
+            Demander un devis
+          </a>
+          <a className="dark-ghost-button large" href={whatsappHref} target="_blank" rel="noreferrer">
+            Nous appeler
+          </a>
+        </div>
+      </section>
+
+      <section id="contact" className="split-section access-section contact-section">
+        <div className="contact-copy">
+          <p className="eyebrow">Demande de devis</p>
+          <h2>Parlez-nous de votre projet.</h2>
+          <p>
+            Une demande claire permet de preparer le bon cadrage : date, lieu, public, budget,
+            besoins techniques et niveau d'accompagnement attendu.
+          </p>
+          <div className="contact-list">
+            <a href={whatsappHref} target="_blank" rel="noreferrer">
+              <MessageCircle size={20} aria-hidden="true" />
+              {whatsappDisplay}
+            </a>
+            <a href="mailto:contact@mgroup.ci">
+              <Mail size={20} aria-hidden="true" />
+              contact@mgroup.ci
+            </a>
+            <span>
+              <MapPin size={20} aria-hidden="true" />
+              Abidjan, Cote d'Ivoire
+            </span>
+          </div>
+        </div>
+        <form className="quote-request-card" onSubmit={openQuoteWhatsApp}>
+          <div className="form-grid">
+            <label>
+              Nom / structure
+              <input type="text" placeholder="Votre nom ou entreprise" />
+            </label>
+            <label>
+              Telephone
+              <input type="tel" placeholder={whatsappDisplay} />
+            </label>
+          </div>
+          <label>
+            Type de prestation
+            <select defaultValue="">
+              <option value="" disabled>
+                Selectionner votre besoin
+              </option>
+              <option>Production evenementielle</option>
+              <option>Pilotage artistique</option>
+              <option>Communication / activation</option>
+              <option>Gestion complete de projet</option>
+            </select>
+          </label>
+          <label>
+            Date souhaitee
+            <input type="date" />
+          </label>
+          <label>
+            Details du projet
+            <textarea placeholder="Decrivez le lieu, le public, le budget estime et les attentes." />
+          </label>
+          <button type="submit" className="quote-button full">
+            Envoyer sur WhatsApp
+          </button>
+        </form>
+      </section>
+
+      <footer className="footer public-footer">
         <div className="footer-brand-block">
           <strong>M Group</strong>
-          <span>Gestion evenementielle, production, coordination et pilotage interne.</span>
+          <span>Strategie, production, coordination et pilotage interne pour projets a fort impact.</span>
         </div>
         <div className="footer-links">
           <a href="#apropos">A propos</a>
-          <a href="#prestations">Prestations</a>
-          <a href="#plateforme">Plateforme</a>
+          <a href="#prestations">Expertises</a>
+          <a href="#realisations">Realisations</a>
+          <a href="#contact">Contact</a>
+          <a href={whatsappHref} target="_blank" rel="noreferrer">
+            WhatsApp
+          </a>
           <button type="button" onClick={onOpenAuth}>
             Mon Espace
           </button>
@@ -1467,7 +1829,15 @@ function HomeView({ onOpenAuth }) {
           <span>Desire Kouame AHOU CONCEPTION</span>
         </div>
       </footer>
-    </>
+      <a className="whatsapp-float" href={whatsappHref} target="_blank" rel="noreferrer">
+        <MessageCircle size={22} aria-hidden="true" />
+        <span className="sr-only">Contacter M Group sur WhatsApp</span>
+      </a>
+      <a className="back-to-top" href="#accueil" title="Retour en haut">
+        <ArrowUp size={20} aria-hidden="true" />
+        <span className="sr-only">Retour en haut de la page</span>
+      </a>
+    </div>
   )
 }
 
@@ -2671,11 +3041,11 @@ function DashboardView({
         ) : activePanelId === 'workflows' ? (
           <WorkflowPage onWorkflowEvent={playAdminSound} user={user} />
         ) : activePanelId === 'events' ? (
-          <EventsPage />
+          <EventsPage user={user} />
         ) : activePanelId === 'commercial' ? (
           <CommercialPage user={user} />
         ) : activePanelId === 'finance' ? (
-          <FinancePage />
+          <FinancePage isAdmin={isAdmin} />
         ) : activePanelId === 'team' ? (
           <TeamPage onHrEvent={playAdminSound} pendingCount={pendingUsers.length} user={user} />
         ) : activePanelId === 'budget' ? (
@@ -2752,10 +3122,16 @@ function RoleOverviewPage({
   })
   const [notice, setNotice] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const visibleWidgets = normalizeInterfacePreferences(preferences).widgets
+  const activePreferences = normalizeInterfacePreferences(preferences)
+  const visibleWidgets = activePreferences.widgets
   const isRh = user.roleValues.includes('RH')
   const isCommercial = user.roleValues.includes('COMMERCIAL')
+  const isComptable = user.roleValues.includes('COMPTABLE')
+  const isSecretaire = user.roleValues.includes('SECRETAIRE')
+  const canEvents = isAdmin || isRh || isCommercial || isComptable || isSecretaire
+  const canWorkflows = isAdmin || isRh || isCommercial || isComptable
   const canCommercial = isAdmin || user.roleValues.includes('COMMERCIAL') || user.roleValues.includes('COMPTABLE')
+  const canFinance = isAdmin || isComptable
   const canDocuments =
     isAdmin ||
     user.roleValues.includes('RH') ||
@@ -2766,9 +3142,9 @@ function RoleOverviewPage({
   useEffect(() => {
     let isMounted = true
     const requests = [
-      api.getEvents().catch(() => []),
-      api.getWorkflows().catch(() => []),
-      isAdmin ? api.getFinanceSummary().catch(() => null) : Promise.resolve(null),
+      canEvents ? api.getEvents().catch(() => []) : Promise.resolve([]),
+      canWorkflows ? api.getWorkflows().catch(() => []) : Promise.resolve([]),
+      canFinance ? api.getFinanceSummary().catch(() => null) : Promise.resolve(null),
       isAdmin || isRh ? api.getHrOverview().catch(() => null) : Promise.resolve(null),
       canCommercial ? api.getCommercialOverview().catch(() => null) : Promise.resolve(null),
       canDocuments ? api.getDocumentsOverview().catch(() => null) : Promise.resolve(null),
@@ -2797,11 +3173,12 @@ function RoleOverviewPage({
     return () => {
       isMounted = false
     }
-  }, [canCommercial, canDocuments, canReports, isAdmin, isRh, user.roleValues])
+  }, [canCommercial, canDocuments, canEvents, canFinance, canReports, canWorkflows, isAdmin, isRh, user.roleValues])
 
   const pendingAdminWorkflows = overview.workflows.filter(
     (workflow) => workflow.status === 'PENDING_ADMIN',
   )
+  const pendingBudgetWorkflows = overview.workflows.filter((workflow) => workflow.status === 'PENDING_BUDGET')
   const pendingRhWorkflows = overview.workflows.filter((workflow) => workflow.status === 'PENDING_RH')
   const activeWorkflowStatuses = ['PENDING_BUDGET', 'PENDING_RH', 'PENDING_ADMIN']
   const activeCommercialWorkflows = overview.workflows.filter((workflow) =>
@@ -2815,6 +3192,232 @@ function RoleOverviewPage({
   const eventBars = overview.events.length
     ? overview.events.slice(0, 12).map((event, index) => 30 + ((index + event.title.length) % 9) * 7)
     : [36, 54, 42, 68, 48, 76, 58, 71]
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const upcomingEvents = overview.events
+    .filter((event) => {
+      const startDate = dateFromValue(event.startsAt)
+      return startDate && !Number.isNaN(startDate.getTime()) && startDate >= today
+    })
+    .sort((firstEvent, secondEvent) => new Date(firstEvent.startsAt) - new Date(secondEvent.startsAt))
+    .slice(0, 5)
+  const activeEventsCount = overview.events.filter(
+    (event) => !['COMPLETED', 'CANCELLED'].includes(event.status),
+  ).length
+  const financeTotals = overview.finance?.totals ?? {}
+  const plannedBudgetFcfa = financeTotals.plannedBudgetFcfa ?? 0
+  const approvedBudgetFcfa = financeTotals.approvedBudgetFcfa ?? 0
+  const actualExpensesFcfa = financeTotals.actualExpensesFcfa ?? 0
+  const pendingPaymentsFcfa = financeTotals.pendingPaymentsFcfa ?? 0
+  const overBudgetFcfa = financeTotals.overBudgetFcfa ?? 0
+  const budgetReferenceFcfa = approvedBudgetFcfa || plannedBudgetFcfa
+  const budgetConsumptionRate = budgetReferenceFcfa
+    ? clampPercent((actualExpensesFcfa / budgetReferenceFcfa) * 100)
+    : 0
+  const remainingBudgetFcfa = Math.max(budgetReferenceFcfa - actualExpensesFcfa, 0)
+  const completedEventsCount =
+    overview.reports?.totals.completedEvents ??
+    overview.events.filter((event) => event.status === 'COMPLETED').length
+  const pendingDocumentsCount = overview.documents?.totals.pendingValidation ?? 0
+  const activeUsersCount = overview.reports?.totals.activeUsers ?? overview.hr?.totals.personnel ?? 0
+  const securityScore = [
+    user.twoFactorEnabled,
+    Boolean(user.emailVerifiedAt),
+    Boolean(user.lastPasswordChangedAt),
+  ].filter(Boolean).length
+  const adminPriorityItems = [
+    {
+      title: 'Inscriptions a valider',
+      count: pendingUsers.length,
+      detail: `${pendingUsers.length} demande(s) en attente`,
+      icon: ClipboardCheck,
+      panel: 'validation',
+      tone: pendingUsers.length ? 'urgent' : 'ok',
+      visible: true,
+    },
+    {
+      title: 'Workflows Admin',
+      count: pendingAdminWorkflows.length,
+      detail: `${pendingAdminWorkflows.length} decision(s) a prendre`,
+      icon: Layers,
+      panel: 'workflows',
+      tone: pendingAdminWorkflows.length ? 'warning' : 'ok',
+      visible: visibleWidgets.workflows,
+    },
+    {
+      title: 'Budgets sensibles',
+      count: overview.finance?.alerts.length ?? 0,
+      detail: `${formatFcfa(overBudgetFcfa)} de depassement`,
+      icon: AlertTriangle,
+      panel: 'budget',
+      tone: overview.finance?.alerts.length ? 'danger' : 'ok',
+      visible: visibleWidgets.budget,
+    },
+    {
+      title: 'Documents a valider',
+      count: pendingDocumentsCount,
+      detail: `${pendingDocumentsCount} document(s) en attente`,
+      icon: FileText,
+      panel: 'documents',
+      tone: pendingDocumentsCount ? 'warning' : 'ok',
+      visible: visibleWidgets.documents,
+    },
+  ]
+  const eventStatusSummary = eventStatusOptions.map((statusOption) => ({
+    ...statusOption,
+    count: overview.events.filter((event) => event.status === statusOption.value).length,
+  }))
+  const maxEventStatusCount = Math.max(...eventStatusSummary.map((status) => status.count), 1)
+  // Flux d'activite agrege pour que l'Admin voie les prochaines decisions sans changer de page.
+  const adminActivityItems = [
+    ...pendingUsers.slice(0, 2).map((pendingUser) => ({
+      title: userDisplayName(pendingUser),
+      meta: 'Nouvelle inscription',
+      panel: 'validation',
+    })),
+    ...pendingAdminWorkflows.slice(0, 2).map((workflow) => ({
+      title: workflow.title ?? workflow.event?.title ?? 'Workflow a valider',
+      meta: workflowStatusLabel(workflow.status),
+      panel: 'workflows',
+    })),
+    ...(overview.finance?.alerts ?? []).slice(0, 2).map((alert) => ({
+      title: alert.title,
+      meta: `Depassement : ${formatFcfa(Math.max((alert.actualExpensesFcfa ?? 0) - (alert.limitFcfa ?? 0), 0))}`,
+      panel: 'budget',
+    })),
+    ...(overview.documents?.documents ?? [])
+      .filter((document) => document.status === 'PENDING_VALIDATION')
+      .slice(0, 2)
+      .map((document) => ({
+        title: document.label,
+        meta: businessDocumentStatusLabel(document.status),
+        panel: 'documents',
+      })),
+  ].slice(0, 6)
+  const passwordChangedAt = dateFromValue(user.lastPasswordChangedAt)
+  const formattedPasswordChangedAt =
+    passwordChangedAt && !Number.isNaN(passwordChangedAt.getTime())
+      ? formatDashboardDate(passwordChangedAt, activePreferences)
+      : 'A definir'
+  const lastLoginDate = dateFromValue(user.lastLoginAt)
+  const formattedLastLogin =
+    lastLoginDate && !Number.isNaN(lastLoginDate.getTime())
+      ? formatDashboardDateTime(lastLoginDate, activePreferences)
+      : 'Non disponible'
+  const rhPriorityItems = [
+    {
+      title: 'Personnel disponible',
+      count: overview.hr?.totals.available ?? 0,
+      detail: `${overview.hr?.totals.personnel ?? 0} profil(s) RH suivis`,
+      icon: UserCheck,
+      panel: 'team',
+      tone: 'ok',
+      visible: visibleWidgets.hr,
+    },
+    {
+      title: 'Affectations RH',
+      count: pendingRhWorkflows.length,
+      detail: 'Demandes qui attendent une affectation',
+      icon: Layers,
+      panel: 'workflows',
+      tone: pendingRhWorkflows.length ? 'warning' : 'ok',
+      visible: visibleWidgets.workflows,
+    },
+    {
+      title: 'Missions a venir',
+      count: overview.hr?.totals.missionsUpcoming ?? 0,
+      detail: 'Planning equipe et terrain',
+      icon: CalendarDays,
+      panel: 'team',
+      tone: 'urgent',
+      visible: visibleWidgets.hr,
+    },
+    {
+      title: 'Documents RH',
+      count: overview.documents?.totals.pendingValidation ?? 0,
+      detail: 'Pieces administratives a surveiller',
+      icon: FileText,
+      panel: 'documents',
+      tone: pendingDocumentsCount ? 'warning' : 'ok',
+      visible: visibleWidgets.documents,
+    },
+  ]
+  const commercialPriorityItems = [
+    {
+      title: 'Prospects ouverts',
+      count: overview.commercial?.totals.prospects ?? 0,
+      detail: 'Clients en discussion ou nouveaux',
+      icon: UserPlus,
+      panel: 'commercial',
+      tone: 'urgent',
+      visible: visibleWidgets.clients,
+    },
+    {
+      title: 'Demandes actives',
+      count: overview.commercial?.totals.openRequests ?? 0,
+      detail: 'Prestations a qualifier',
+      icon: ClipboardCheck,
+      panel: 'commercial',
+      tone: overview.commercial?.totals.openRequests ? 'warning' : 'ok',
+      visible: visibleWidgets.clients,
+    },
+    {
+      title: 'Devis en cours',
+      count: pendingQuotes.length,
+      detail: 'Brouillons ou devis envoyes',
+      icon: FileText,
+      panel: 'commercial',
+      tone: pendingQuotes.length ? 'warning' : 'ok',
+      visible: visibleWidgets.clients,
+    },
+    {
+      title: 'CA gagne',
+      count: formatFcfa(overview.commercial?.totals.revenueFcfa ?? 0),
+      detail: `${overview.commercial?.totals.acceptedQuotes ?? 0} devis accepte(s)`,
+      icon: Trophy,
+      panel: 'reports',
+      tone: 'ok',
+      visible: visibleWidgets.reports,
+    },
+  ]
+  const comptablePriorityItems = [
+    {
+      title: 'Budgets a chiffrer',
+      count: pendingBudgetWorkflows.length,
+      detail: 'Workflows qui attendent le Comptable',
+      icon: Layers,
+      panel: 'workflows',
+      tone: pendingBudgetWorkflows.length ? 'urgent' : 'ok',
+      visible: visibleWidgets.workflows,
+    },
+    {
+      title: 'Budget valide',
+      count: formatFcfa(approvedBudgetFcfa),
+      detail: `${budgetConsumptionRate}% deja consomme`,
+      icon: Banknote,
+      panel: 'budget',
+      tone: 'ok',
+      visible: visibleWidgets.budget,
+    },
+    {
+      title: 'Paiements a suivre',
+      count: formatFcfa(pendingPaymentsFcfa),
+      detail: 'Echeances et references',
+      icon: Wallet,
+      panel: 'finance',
+      tone: pendingPaymentsFcfa ? 'warning' : 'ok',
+      visible: visibleWidgets.finance,
+    },
+    {
+      title: 'Depassements',
+      count: overview.finance?.alerts.length ?? 0,
+      detail: `${formatFcfa(overBudgetFcfa)} hors limite`,
+      icon: AlertTriangle,
+      panel: 'budget',
+      tone: overview.finance?.alerts.length ? 'danger' : 'ok',
+      visible: visibleWidgets.budget,
+    },
+  ]
 
   if (isRh && !isAdmin) {
     return (
@@ -2825,6 +3428,13 @@ function RoleOverviewPage({
           description="Suivez les disponibilites, dossiers du personnel, affectations et workflows RH depuis une vue claire."
         />
         {notice && <p className="auth-notice">{notice}</p>}
+        <section className="admin-command-strip role-priority-strip" aria-label="Priorites RH">
+          {rhPriorityItems
+            .filter((item) => item.visible !== false)
+            .map((item) => (
+              <AdminPriorityCard item={item} key={item.title} onClick={() => onOpenPanel(item.panel)} />
+            ))}
+        </section>
       <OverviewKpis
         cards={[
             { label: 'Personnel actif', value: overview.hr?.totals.personnel ?? 0, icon: Users, tone: 'blue', visible: visibleWidgets.hr },
@@ -2918,6 +3528,13 @@ function RoleOverviewPage({
           description="Pilotez vos prospects, demandes de prestations, devis et relances commerciales sans les outils reserves a l'Admin."
         />
         {notice && <p className="auth-notice">{notice}</p>}
+        <section className="admin-command-strip role-priority-strip" aria-label="Priorites Commercial">
+          {commercialPriorityItems
+            .filter((item) => item.visible !== false)
+            .map((item) => (
+              <AdminPriorityCard item={item} key={item.title} onClick={() => onOpenPanel(item.panel)} />
+            ))}
+        </section>
       <OverviewKpis
         cards={[
             { label: 'Clients', value: overview.commercial?.totals.clients ?? 0, icon: Users, tone: 'blue', visible: visibleWidgets.clients },
@@ -3075,50 +3692,404 @@ function RoleOverviewPage({
     )
   }
 
+  if (isComptable && !isAdmin) {
+    return (
+      <section className="role-overview">
+        <OverviewHero
+          eyebrow="Dashboard Comptable"
+          title="Tresorerie et budgets."
+          description="Suivez les budgets a chiffrer, les depenses reelles, les paiements et les documents financiers."
+        />
+        {notice && <p className="auth-notice">{notice}</p>}
+        <section className="admin-command-strip role-priority-strip" aria-label="Priorites Comptable">
+          {comptablePriorityItems
+            .filter((item) => item.visible !== false)
+            .map((item) => (
+              <AdminPriorityCard item={item} key={item.title} onClick={() => onOpenPanel(item.panel)} />
+            ))}
+        </section>
+        <OverviewKpis
+          cards={[
+            {
+              label: 'Budget previsionnel',
+              value: formatFcfa(plannedBudgetFcfa),
+              icon: Banknote,
+              tone: 'blue',
+              visible: visibleWidgets.budget,
+            },
+            {
+              label: 'Budget valide',
+              value: formatFcfa(approvedBudgetFcfa),
+              icon: CheckCircle2,
+              tone: 'cyan',
+              visible: visibleWidgets.budget,
+            },
+            {
+              label: 'Paiements en attente',
+              value: formatFcfa(pendingPaymentsFcfa),
+              icon: Wallet,
+              tone: 'yellow',
+              visible: visibleWidgets.finance,
+            },
+            {
+              label: 'Alertes budget',
+              value: overview.finance?.alerts.length ?? 0,
+              icon: AlertTriangle,
+              tone: 'coral',
+              visible: visibleWidgets.alerts,
+            },
+          ]}
+        />
+
+        {(visibleWidgets.finance || visibleWidgets.budget) && (
+          <section className="analytics-grid" aria-label="Pilotage comptable">
+            <article className="chart-panel wide">
+              <div className="panel-heading">
+                <div>
+                  <strong>Consommation budgetaire</strong>
+                  <span>{budgetConsumptionRate}% du budget valide consomme</span>
+                </div>
+                <button type="button" className="panel-link-button" onClick={() => onOpenPanel('finance')}>
+                  Tresorerie
+                </button>
+              </div>
+              <div className="budget-progress finance-large-progress" aria-hidden="true">
+                <span style={{ '--progress': `${budgetConsumptionRate}%` }}></span>
+              </div>
+              <ul className="compact-list budget-health-list">
+                <li>
+                  <span>Depenses reelles</span>
+                  <strong>{formatFcfa(actualExpensesFcfa)}</strong>
+                </li>
+                <li>
+                  <span>Reste disponible</span>
+                  <strong>{formatFcfa(remainingBudgetFcfa)}</strong>
+                </li>
+                <li>
+                  <span>Depassement</span>
+                  <strong>{formatFcfa(overBudgetFcfa)}</strong>
+                </li>
+              </ul>
+            </article>
+            <article className="chart-panel compact">
+              <div className="panel-heading">
+                <div>
+                  <strong>Workflows budget</strong>
+                  <span>Actions Comptable</span>
+                </div>
+              </div>
+              <div className="donut-chart budget" aria-hidden="true"></div>
+              <strong className="overview-big-number">{pendingBudgetWorkflows.length}</strong>
+              <p className="budget-health-label">demande(s) attendent un chiffrage</p>
+            </article>
+          </section>
+        )}
+
+        <section className="role-action-grid" aria-label="Actions rapides Comptable">
+          <RoleActionCard
+            icon={Wallet}
+            visible={visibleWidgets.finance}
+            title="Saisir depenses et paiements"
+            text={`${formatFcfa(pendingPaymentsFcfa)} en paiements a suivre.`}
+            onClick={() => onOpenPanel('finance')}
+          />
+          <RoleActionCard
+            icon={Banknote}
+            visible={visibleWidgets.budget}
+            title="Surveiller les budgets"
+            text={`${overview.finance?.alerts.length ?? 0} budget(s) au-dessus de la limite.`}
+            onClick={() => onOpenPanel('budget')}
+          />
+          <RoleActionCard
+            icon={Layers}
+            visible={visibleWidgets.workflows}
+            title="Chiffrer les workflows"
+            text={`${pendingBudgetWorkflows.length} workflow(s) attendent un budget.`}
+            onClick={() => onOpenPanel('workflows')}
+          />
+          <RoleActionCard
+            icon={FileText}
+            visible={visibleWidgets.documents}
+            title="Documents financiers"
+            text={`${overview.documents?.totals.documents ?? 0} devis, factures ou recus classes.`}
+            onClick={() => onOpenPanel('documents')}
+          />
+          <RoleActionCard
+            icon={Activity}
+            visible={visibleWidgets.reports}
+            title="Rapports financiers"
+            text={`${formatFcfa(overview.reports?.totals.consumedBudgetFcfa ?? 0)} de budget consomme.`}
+            onClick={() => onOpenPanel('reports')}
+          />
+        </section>
+      </section>
+    )
+  }
+
+  if (!isAdmin) {
+    return (
+      <section className="role-overview">
+        <OverviewHero
+          eyebrow={`Dashboard ${user.role}`}
+          title="Espace operationnel."
+          description="Votre profil affiche uniquement les modules autorises pour travailler sans surcharge."
+        />
+        {notice && <p className="auth-notice">{notice}</p>}
+        <OverviewKpis
+          cards={[
+            { label: 'Evenements visibles', value: overview.events.length, icon: CalendarDays, tone: 'blue', visible: visibleWidgets.events && canEvents },
+            { label: 'Documents', value: overview.documents?.totals.documents ?? 0, icon: FileText, tone: 'cyan', visible: visibleWidgets.documents },
+            { label: 'Workflows', value: activeCommercialWorkflows.length, icon: Layers, tone: 'yellow', visible: visibleWidgets.workflows },
+            { label: 'Alertes', value: notificationCount, icon: Bell, tone: 'coral', visible: visibleWidgets.alerts },
+          ]}
+        />
+        <section className="role-action-grid" aria-label="Actions rapides">
+          <RoleActionCard
+            icon={CalendarDays}
+            visible={visibleWidgets.events && canEvents}
+            title="Consulter les evenements"
+            text="Suivez les dates, statuts, documents et informations utiles."
+            onClick={() => onOpenPanel('events')}
+          />
+          <RoleActionCard
+            icon={Bell}
+            visible={visibleWidgets.alerts}
+            title="Voir les alertes"
+            text={`${notificationCount} notification(s) dans votre espace.`}
+            onClick={() => onOpenPanel('alerts')}
+          />
+          <RoleActionCard
+            icon={MonitorCog}
+            visible
+            title="Adapter l'interface"
+            text="Theme, langue, densite et widgets visibles."
+            onClick={() => onOpenPanel('settings')}
+          />
+        </section>
+      </section>
+    )
+  }
+
   return (
-    <section className="role-overview">
+    <section className="role-overview admin-overview">
       <OverviewHero
         eyebrow="Dashboard Admin"
-        title="Centre de commandement M Group."
-        description="Validez les acces, controlez les budgets, suivez les workflows et gardez la production sous surveillance."
+        title="Pilotage Admin."
+        description="Une vue courte pour arbitrer les acces, les workflows, les budgets et les operations sensibles."
       />
       {(notice || dashboardError) && <p className="auth-notice">{notice || dashboardError}</p>}
+
+      <section className="admin-command-strip" aria-label="Priorites Admin">
+        {adminPriorityItems
+          .filter((item) => item.visible !== false)
+          .map((item) => (
+            <AdminPriorityCard item={item} key={item.title} onClick={() => onOpenPanel(item.panel)} />
+          ))}
+      </section>
+
       <OverviewKpis
         cards={[
-          { label: 'Inscriptions', value: pendingUsers.length, icon: UserPlus, tone: 'blue', visible: true },
-          { label: 'Evenements', value: overview.events.length, icon: CalendarDays, tone: 'cyan', visible: visibleWidgets.events },
-          { label: 'Budgets en alerte', value: overview.finance?.alerts.length ?? 0, icon: Banknote, tone: 'yellow', visible: visibleWidgets.budget },
-          { label: 'Alertes', value: notificationCount, icon: Bell, tone: 'coral', visible: visibleWidgets.alerts },
+          { label: 'Acces a valider', value: pendingUsers.length, icon: UserPlus, tone: 'blue', visible: true },
+          {
+            label: 'Evenements actifs',
+            value: activeEventsCount,
+            icon: CalendarDays,
+            tone: 'cyan',
+            visible: visibleWidgets.events,
+          },
+          {
+            label: 'Budget consomme',
+            value: `${budgetConsumptionRate}%`,
+            icon: Banknote,
+            tone: 'yellow',
+            visible: visibleWidgets.budget,
+          },
+          { label: 'Alertes critiques', value: notificationCount, icon: Bell, tone: 'coral', visible: visibleWidgets.alerts },
         ]}
       />
-      {(visibleWidgets.events || visibleWidgets.budget) && <section className="analytics-grid" aria-label="Pilotage admin">
-        {visibleWidgets.events && (
-        <article className="chart-panel wide">
+
+      {(visibleWidgets.events || visibleWidgets.budget) && (
+        <section className="analytics-grid admin-analytics-grid" aria-label="Pilotage admin">
+          {visibleWidgets.events && (
+            <article className="chart-panel wide admin-status-panel">
+              <div className="panel-heading">
+                <div>
+                  <strong>Production evenementielle</strong>
+                  <span>{isLoading ? 'Chargement...' : `${overview.events.length} evenement(s) suivis`}</span>
+                </div>
+                <button type="button" className="panel-link-button" onClick={() => onOpenPanel('events')}>
+                  Voir
+                </button>
+              </div>
+              {overview.events.length ? (
+                <div className="status-bar-list" aria-label="Repartition des statuts evenementiels">
+                  {eventStatusSummary.map((status) => (
+                    <article key={status.value}>
+                      <span>{status.label}</span>
+                      <div>
+                        <i style={{ '--bar-width': `${Math.max((status.count / maxEventStatusCount) * 100, 8)}%` }}></i>
+                      </div>
+                      <strong>{status.count}</strong>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="bar-chart admin-empty-chart" aria-hidden="true">
+                  {eventBars.map((height, index) => (
+                    <span key={index} style={{ '--bar-height': `${height}%` }}></span>
+                  ))}
+                </div>
+              )}
+              <div className="admin-panel-footer">
+                <strong>{completedEventsCount}</strong>
+                <span>evenement(s) termines sur la periode.</span>
+              </div>
+            </article>
+          )}
+
+          {visibleWidgets.budget && (
+            <article className="chart-panel compact budget-health-card">
+              <div className="panel-heading">
+                <div>
+                  <strong>Budget & tresorerie</strong>
+                  <span>Consommation globale</span>
+                </div>
+              </div>
+              <div
+                className="donut-chart budget"
+                style={{
+                  background: `conic-gradient(var(--primary-color) 0 ${budgetConsumptionRate}%, var(--accent-color) ${budgetConsumptionRate}% 100%)`,
+                }}
+                aria-hidden="true"
+              ></div>
+              <strong className="overview-big-number">{formatFcfa(actualExpensesFcfa)}</strong>
+              <p className="budget-health-label">{budgetConsumptionRate}% du budget valide consomme</p>
+              <div className="budget-progress" aria-hidden="true">
+                <span style={{ '--progress': `${budgetConsumptionRate}%` }}></span>
+              </div>
+              <ul className="compact-list budget-health-list">
+                <li>
+                  <span>Budget valide</span>
+                  <strong>{formatFcfa(budgetReferenceFcfa)}</strong>
+                </li>
+                <li>
+                  <span>Reste disponible</span>
+                  <strong>{formatFcfa(remainingBudgetFcfa)}</strong>
+                </li>
+                <li>
+                  <span>Paiements a suivre</span>
+                  <strong>{formatFcfa(pendingPaymentsFcfa)}</strong>
+                </li>
+              </ul>
+            </article>
+          )}
+        </section>
+      )}
+
+      <section className="admin-decision-grid" aria-label="Informations decisives Admin">
+        <article className="chart-panel admin-activity-card">
           <div className="panel-heading">
-            <strong>Activite evenementielle</strong>
-            <span>{overview.events.length} evenement(s)</span>
+            <div>
+              <strong>Activite recente</strong>
+              <span>Actions qui meritent une lecture rapide</span>
+            </div>
           </div>
-          <div className="bar-chart" aria-hidden="true">
-            {eventBars.map((height, index) => (
-              <span key={index} style={{ '--bar-height': `${height}%` }}></span>
-            ))}
-          </div>
+          {adminActivityItems.length ? (
+            <ul className="admin-activity-list">
+              {adminActivityItems.map((item, index) => (
+                <li key={`${item.panel}-${index}`}>
+                  <button type="button" onClick={() => onOpenPanel(item.panel)}>
+                    <span>{item.meta}</span>
+                    <strong>{item.title}</strong>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <DashboardEmptyState
+              title="Aucune action urgente."
+              text="Les inscriptions, workflows, budgets et documents sont sous controle."
+            />
+          )}
         </article>
-        )}
-        {visibleWidgets.budget && (
-        <article className="chart-panel compact">
+
+        <article className="chart-panel admin-calendar-card">
           <div className="panel-heading">
-            <strong>Budget global</strong>
-            <span>FCFA</span>
+            <div>
+              <strong>Prochains evenements</strong>
+              <span>Calendrier operationnel</span>
+            </div>
+            <button type="button" className="panel-link-button" onClick={() => onOpenPanel('events')}>
+              Planning
+            </button>
           </div>
-          <div className="donut-chart budget" aria-hidden="true"></div>
-          <strong className="overview-big-number">
-            {formatFcfa(overview.finance?.totals.approvedBudgetFcfa ?? 0)}
-          </strong>
+          {upcomingEvents.length ? (
+            <ul className="compact-list admin-event-list">
+              {upcomingEvents.map((event) => {
+                const startDate = dateFromValue(event.startsAt)
+                const dateLabel =
+                  startDate && !Number.isNaN(startDate.getTime())
+                    ? formatDashboardDate(startDate, activePreferences)
+                    : 'Date a definir'
+
+                return (
+                  <li key={event.id}>
+                    <span>{dateLabel}</span>
+                    <strong>{event.title}</strong>
+                    <small>{eventStatusLabel(event.status)}</small>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <DashboardEmptyState
+              title="Aucun evenement planifie."
+              text="Creez le prochain evenement depuis le module Evenements."
+            />
+          )}
         </article>
-        )}
-      </section>}
-      <section className="role-action-grid" aria-label="Actions rapides Admin">
+
+        <article className="chart-panel admin-security-card">
+          <div className="panel-heading">
+            <div>
+              <strong>Securite Admin</strong>
+              <span>{securityScore}/3 controles actifs</span>
+            </div>
+            <ShieldCheck size={24} aria-hidden="true" />
+          </div>
+          <div className="security-score-ring" style={{ '--score': `${(securityScore / 3) * 100}%` }} aria-hidden="true">
+            <strong>{securityScore}/3</strong>
+          </div>
+          <ul className="compact-list security-check-list">
+            <li>
+              <span>Double authentification</span>
+              <strong className={user.twoFactorEnabled ? 'good' : 'warning'}>
+                {user.twoFactorEnabled ? 'Activee' : 'A activer'}
+              </strong>
+            </li>
+            <li>
+              <span>Email</span>
+              <strong className={user.emailVerifiedAt ? 'good' : 'warning'}>
+                {user.emailVerifiedAt ? 'Verifie' : 'A confirmer'}
+              </strong>
+            </li>
+            <li>
+              <span>Mot de passe</span>
+              <strong>{formattedPasswordChangedAt}</strong>
+            </li>
+            <li>
+              <span>Derniere connexion</span>
+              <strong>{formattedLastLogin}</strong>
+            </li>
+            <li>
+              <span>Utilisateurs actifs</span>
+              <strong>{activeUsersCount}</strong>
+            </li>
+          </ul>
+        </article>
+      </section>
+
+      <section className="role-action-grid admin-action-grid" aria-label="Actions rapides Admin">
         <RoleActionCard
           icon={ClipboardCheck}
           visible
@@ -3129,14 +4100,14 @@ function RoleOverviewPage({
         <RoleActionCard
           icon={Layers}
           visible={visibleWidgets.workflows}
-          title="Decisions workflow"
+          title="Arbitrer les workflows"
           text={`${pendingAdminWorkflows.length} workflow(s) attendent validation ou refus.`}
           onClick={() => onOpenPanel('workflows')}
         />
         <RoleActionCard
-          icon={UserPlus}
+          icon={Handshake}
           visible={visibleWidgets.clients}
-          title="Pipeline commercial"
+          title="Suivre le commercial"
           text={`${overview.commercial?.totals.prospects ?? 0} prospect(s), ${formatFcfa(
             overview.commercial?.totals.revenueFcfa ?? 0,
           )} gagne(s).`}
@@ -3145,14 +4116,14 @@ function RoleOverviewPage({
         <RoleActionCard
           icon={Wallet}
           visible={visibleWidgets.finance}
-          title="Controle financier"
-          text={`${formatFcfa(overview.finance?.totals.pendingPaymentsFcfa ?? 0)} en paiements a suivre.`}
+          title="Controler la tresorerie"
+          text={`${formatFcfa(pendingPaymentsFcfa)} en paiements a suivre.`}
           onClick={() => onOpenPanel('finance')}
         />
         <RoleActionCard
           icon={Users}
           visible={visibleWidgets.hr}
-          title="Equipe et RH"
+          title="Superviser l'equipe"
           text={`${overview.hr?.totals.personnel ?? 0} profil(s) actifs dans le personnel.`}
           onClick={() => onOpenPanel('team')}
         />
@@ -3160,9 +4131,7 @@ function RoleOverviewPage({
           icon={FileText}
           visible={visibleWidgets.documents || visibleWidgets.reports}
           title="Documents et rapports"
-          text={`${overview.documents?.totals.pendingValidation ?? 0} validation(s), ${
-            overview.reports?.totals.completedEvents ?? 0
-          } evenement(s) realises.`}
+          text={`${pendingDocumentsCount} validation(s), ${completedEventsCount} evenement(s) realises.`}
           onClick={() => onOpenPanel('documents')}
         />
       </section>
@@ -3213,6 +4182,31 @@ function RoleActionCard({ icon: Icon, onClick, text, title, visible = true }) {
       <strong>{title}</strong>
       <small>{text}</small>
     </button>
+  )
+}
+
+function AdminPriorityCard({ item, onClick }) {
+  const Icon = item.icon
+
+  return (
+    <button type="button" className={`admin-priority-card ${item.tone}`} onClick={onClick}>
+      <span className="admin-priority-icon">
+        <Icon size={22} aria-hidden="true" />
+      </span>
+      <strong>{item.count}</strong>
+      <p>{item.title}</p>
+      <small>{item.detail}</small>
+    </button>
+  )
+}
+
+function DashboardEmptyState({ text, title }) {
+  return (
+    <div className="dashboard-empty-state">
+      <CheckCircle2 size={22} aria-hidden="true" />
+      <strong>{title}</strong>
+      <p>{text}</p>
+    </div>
   )
 }
 
@@ -3388,7 +4382,13 @@ function CommercialPage({ user }) {
         address: getFormValue(formData, 'address'),
         source: getFormValue(formData, 'source'),
         status: getFormValue(formData, 'status') || 'NEW',
-        notes: getFormValue(formData, 'notes'),
+        notes: buildStructuredNotes(formData, 'notes', [
+          { label: 'Type client', name: 'clientType' },
+          { label: 'Secteur', name: 'sector' },
+          { label: 'Email facturation', name: 'billingEmail' },
+          { label: 'Numero fiscal / RCCM', name: 'taxInfo' },
+          { label: 'Canal prioritaire', name: 'preferredChannel' },
+        ]),
       })
       event.currentTarget.reset()
       await refreshCommercial()
@@ -3425,7 +4425,14 @@ function CommercialPage({ user }) {
         clientId: getFormValue(formData, 'clientId'),
         eventId: getFormValue(formData, 'eventId'),
         title: getFormValue(formData, 'title'),
-        description: getFormValue(formData, 'description'),
+        description: buildStructuredNotes(formData, 'description', [
+          { label: 'Type de prestation', name: 'prestationType' },
+          { label: 'Lieu souhaite', name: 'eventLocation' },
+          { label: 'Nombre invite(s)', name: 'guestCount' },
+          { label: 'Niveau priorite', name: 'priority' },
+          { label: 'Decisionnaire client', name: 'decisionMaker' },
+          { label: 'Contraintes techniques', name: 'technicalConstraints' },
+        ]),
         expectedBudgetFcfa: Number(getFormValue(formData, 'expectedBudgetFcfa') || 0),
         status: getFormValue(formData, 'status') || 'NEW',
         dueAt: getFormValue(formData, 'dueAt'),
@@ -3455,7 +4462,28 @@ function CommercialPage({ user }) {
         amountFcfa: Number(getFormValue(formData, 'amountFcfa') || 0),
         status: getFormValue(formData, 'status') || 'DRAFT',
         validUntil: getFormValue(formData, 'validUntil'),
-        notes: getFormValue(formData, 'notes'),
+        notes: buildStructuredNotes(formData, 'notes', [
+          { label: 'Contact client pour le devis', name: 'quoteContact' },
+          { label: 'Reference client / appel d offre', name: 'clientReference' },
+          { label: 'Type de prestation', name: 'prestationType' },
+          { label: 'Date evenement', name: 'eventDate' },
+          { label: 'Lieu / site', name: 'venue' },
+          { label: 'Jauge estimee', name: 'audienceSize' },
+          { label: 'Production evenementielle', name: 'productionLineFcfa', suffix: ' FCFA' },
+          { label: 'Technique son / lumiere', name: 'technicalLineFcfa', suffix: ' FCFA' },
+          { label: 'Artistes / booking', name: 'artistLineFcfa', suffix: ' FCFA' },
+          { label: 'Logistique terrain', name: 'logisticsLineFcfa', suffix: ' FCFA' },
+          { label: 'Administration / coordination', name: 'adminLineFcfa', suffix: ' FCFA' },
+          { label: 'Taux TVA', name: 'taxRate', suffix: '%' },
+          { label: 'TVA incluse', name: 'taxIncluded' },
+          { label: 'Livrables inclus', name: 'deliverables' },
+          { label: 'Logistique incluse', name: 'logistics' },
+          { label: 'Exclusions', name: 'exclusions' },
+          { label: 'Remise', name: 'discountFcfa', suffix: ' FCFA' },
+          { label: 'Acompte demande', name: 'depositFcfa', suffix: ' FCFA' },
+          { label: 'Conditions de paiement', name: 'paymentTerms' },
+          { label: 'Validite commerciale', name: 'commercialValidity' },
+        ]),
       })
       setOverview(nextOverview)
       event.currentTarget.reset()
@@ -3478,7 +4506,11 @@ function CommercialPage({ user }) {
         clientId: getFormValue(formData, 'clientId'),
         channel: getFormValue(formData, 'channel'),
         subject: getFormValue(formData, 'subject'),
-        notes: getFormValue(formData, 'notes'),
+        notes: buildStructuredNotes(formData, 'notes', [
+          { label: 'Prochaine action', name: 'nextAction' },
+          { label: 'Date de relance', name: 'followUpAt' },
+          { label: 'Niveau de chaleur', name: 'leadTemperature' },
+        ]),
       })
       setOverview(nextOverview)
       event.currentTarget.reset()
@@ -3551,6 +4583,37 @@ function CommercialPage({ user }) {
             <label>
               Source
               <input name="source" type="text" placeholder="Recommandation, reseaux, appel..." />
+            </label>
+            <label>
+              Type client
+              <select name="clientType" defaultValue="Entreprise">
+                <option value="Entreprise">Entreprise</option>
+                <option value="Particulier">Particulier</option>
+                <option value="Institution">Institution</option>
+                <option value="Sponsor">Sponsor</option>
+                <option value="Agence">Agence</option>
+              </select>
+            </label>
+            <label>
+              Secteur
+              <input name="sector" type="text" placeholder="Musique, corporate, institutionnel..." />
+            </label>
+            <label>
+              Email facturation
+              <input name="billingEmail" type="email" placeholder="facturation@example.com" />
+            </label>
+            <label>
+              Infos fiscales
+              <input name="taxInfo" type="text" placeholder="RCCM, contribuable, TVA..." />
+            </label>
+            <label>
+              Canal prioritaire
+              <select name="preferredChannel" defaultValue="WhatsApp">
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="Telephone">Telephone</option>
+                <option value="Email">Email</option>
+                <option value="Rendez-vous">Rendez-vous</option>
+              </select>
             </label>
             <label>
               Statut
@@ -3646,8 +4709,39 @@ function CommercialPage({ user }) {
               <input name="title" type="text" placeholder="Concert, prestation, sponsoring..." required />
             </label>
             <label>
+              Type de prestation
+              <select name="prestationType" defaultValue="Production evenementielle">
+                <option value="Production evenementielle">Production evenementielle</option>
+                <option value="Booking artiste">Booking artiste</option>
+                <option value="Coordination artistique">Coordination artistique</option>
+                <option value="Sponsoring / partenariat">Sponsoring / partenariat</option>
+                <option value="Gestion administrative">Gestion administrative</option>
+              </select>
+            </label>
+            <label>
+              Lieu souhaite
+              <input name="eventLocation" type="text" placeholder="Salle, ville, pays..." />
+            </label>
+            <label>
+              Nombre invite(s)
+              <input name="guestCount" type="number" min="0" placeholder="500" />
+            </label>
+            <label>
               Budget attendu
               <input name="expectedBudgetFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              Priorite
+              <select name="priority" defaultValue="Normale">
+                <option value="Basse">Basse</option>
+                <option value="Normale">Normale</option>
+                <option value="Haute">Haute</option>
+                <option value="Urgente">Urgente</option>
+              </select>
+            </label>
+            <label>
+              Decisionnaire
+              <input name="decisionMaker" type="text" placeholder="Nom du valideur cote client" />
             </label>
             <label>
               Statut
@@ -3666,6 +4760,10 @@ function CommercialPage({ user }) {
             <label className="wide-field">
               Description
               <textarea name="description" placeholder="Besoin client et informations importantes"></textarea>
+            </label>
+            <label className="wide-field">
+              Contraintes techniques
+              <textarea name="technicalConstraints" placeholder="Son, lumiere, scene, securite, horaires, acces..."></textarea>
             </label>
           </div>
           <button type="submit" className="primary-button" disabled={isSaving}>
@@ -3753,12 +4851,93 @@ function CommercialPage({ user }) {
               </select>
             </label>
             <label>
+              Evenement lie
+              <select name="eventId" defaultValue="">
+                <option value="">Sans evenement</option>
+                {events.map((event) => (
+                  <option key={event.id} value={event.id}>
+                    {event.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Titre
               <input name="title" type="text" placeholder="Devis production..." required />
             </label>
             <label>
+              Contact devis
+              <input name="quoteContact" type="text" placeholder="Nom, fonction, telephone" />
+            </label>
+            <label>
+              Reference client
+              <input name="clientReference" type="text" placeholder="AO, brief, bon de commande..." />
+            </label>
+            <label>
+              Type de prestation
+              <select name="prestationType" defaultValue="Production evenementielle">
+                <option value="Production evenementielle">Production evenementielle</option>
+                <option value="Booking artiste">Booking artiste</option>
+                <option value="Coordination artistique">Coordination artistique</option>
+                <option value="Sponsoring / partenariat">Sponsoring / partenariat</option>
+                <option value="Autre">Autre</option>
+              </select>
+            </label>
+            <label>
+              Date evenement
+              <input name="eventDate" type="datetime-local" />
+            </label>
+            <label>
+              Lieu / site
+              <input name="venue" type="text" placeholder="Lieu de la prestation" />
+            </label>
+            <label>
+              Jauge estimee
+              <input name="audienceSize" type="number" min="0" placeholder="Nombre de personnes" />
+            </label>
+            <label>
               Montant
               <input name="amountFcfa" type="number" min="0" placeholder="FCFA" required />
+            </label>
+            <label>
+              Production evenementielle
+              <input name="productionLineFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              Technique son / lumiere
+              <input name="technicalLineFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              Artistes / booking
+              <input name="artistLineFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              Logistique terrain
+              <input name="logisticsLineFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              Administration / coordination
+              <input name="adminLineFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              Remise
+              <input name="discountFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              Acompte demande
+              <input name="depositFcfa" type="number" min="0" placeholder="FCFA" />
+            </label>
+            <label>
+              TVA
+              <input name="taxRate" type="number" min="0" max="100" placeholder="18" />
+            </label>
+            <label>
+              TVA incluse
+              <select name="taxIncluded" defaultValue="Oui">
+                <option value="Oui">Oui</option>
+                <option value="Non">Non</option>
+                <option value="Non applicable">Non applicable</option>
+              </select>
             </label>
             <label>
               Statut
@@ -3773,6 +4952,26 @@ function CommercialPage({ user }) {
             <label>
               Valide jusqu'au
               <input name="validUntil" type="datetime-local" />
+            </label>
+            <label>
+              Validite commerciale
+              <input name="commercialValidity" type="text" placeholder="15 jours, 30 jours..." />
+            </label>
+            <label className="wide-field">
+              Livrables inclus
+              <textarea name="deliverables" placeholder="Production, coordination, personnel, logistique, documents..."></textarea>
+            </label>
+            <label className="wide-field">
+              Logistique incluse
+              <textarea name="logistics" placeholder="Transport, hebergement, restauration, securite, technique..."></textarea>
+            </label>
+            <label className="wide-field">
+              Exclusions
+              <textarea name="exclusions" placeholder="Elements non compris, frais variables, obligations client..."></textarea>
+            </label>
+            <label className="wide-field">
+              Conditions de paiement
+              <textarea name="paymentTerms" placeholder="Acompte, solde, delai de paiement, mode de paiement..."></textarea>
             </label>
             <label className="wide-field">
               Notes
@@ -3810,6 +5009,23 @@ function CommercialPage({ user }) {
             <label>
               Sujet
               <input name="subject" type="text" placeholder="Relance, validation, negociation..." />
+            </label>
+            <label>
+              Niveau de chaleur
+              <select name="leadTemperature" defaultValue="Tiede">
+                <option value="Froid">Froid</option>
+                <option value="Tiede">Tiede</option>
+                <option value="Chaud">Chaud</option>
+                <option value="Pret a signer">Pret a signer</option>
+              </select>
+            </label>
+            <label>
+              Date de relance
+              <input name="followUpAt" type="datetime-local" />
+            </label>
+            <label className="wide-field">
+              Prochaine action
+              <input name="nextAction" type="text" placeholder="Envoyer devis, appeler, rendez-vous..." />
             </label>
             <label className="wide-field">
               Compte rendu
@@ -3930,7 +5146,12 @@ function DocumentsPage({ isAdmin }) {
         fileName: file?.name,
         mimeType: file?.type,
         sizeBytes: file?.size,
-        notes: getFormValue(formData, 'notes'),
+        notes: buildStructuredNotes(formData, 'notes', [
+          { label: 'Niveau confidentialite', name: 'confidentiality' },
+          { label: 'Version', name: 'version' },
+          { label: 'Responsable document', name: 'documentOwner' },
+          { label: 'Validation attendue', name: 'validationNeed' },
+        ]),
       })
       event.currentTarget.reset()
       await refreshDocuments()
@@ -3956,7 +5177,12 @@ function DocumentsPage({ isAdmin }) {
         type: getFormValue(formData, 'type') || 'QUOTE',
         templateName: getFormValue(formData, 'templateName') || 'Modele M Group',
         amountFcfa: Number(getFormValue(formData, 'amountFcfa') || 0),
-        notes: getFormValue(formData, 'notes'),
+        notes: buildStructuredNotes(formData, 'notes', [
+          { label: 'Objet commercial', name: 'businessPurpose' },
+          { label: 'Conditions de paiement', name: 'paymentTerms' },
+          { label: 'Delai validite', name: 'validityDelay' },
+          { label: 'Signataire attendu', name: 'expectedSigner' },
+        ]),
       })
       event.currentTarget.reset()
       await refreshDocuments()
@@ -3979,6 +5205,36 @@ function DocumentsPage({ isAdmin }) {
       setNotice(error.message)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const openDocument = (document) => {
+    setNotice('')
+
+    try {
+      if (document.mimeType === 'application/pdf' && document.templateName) {
+        openBlobInNewTab(buildBusinessDocumentPdfBlob(document))
+        return
+      }
+
+      if (document.url?.startsWith('data:')) {
+        openBlobInNewTab(dataUrlToBlob(document.url))
+        return
+      }
+
+      if (document.url) {
+        const openedWindow = window.open(document.url, '_blank', 'noopener,noreferrer')
+
+        if (!openedWindow) {
+          throw new Error("Le navigateur a bloque l'ouverture du document.")
+        }
+
+        return
+      }
+
+      throw new Error("Ce document n'a pas encore de fichier ou d'URL.")
+    } catch (error) {
+      setNotice(error.message)
     }
   }
 
@@ -4107,6 +5363,27 @@ function DocumentsPage({ isAdmin }) {
               URL externe
               <input name="url" type="text" placeholder="Lien prive si le fichier est deja stocke" />
             </label>
+            <label>
+              Confidentialite
+              <select name="confidentiality" defaultValue="Interne">
+                <option value="Public">Public</option>
+                <option value="Interne">Interne</option>
+                <option value="Confidentiel">Confidentiel</option>
+                <option value="Direction uniquement">Direction uniquement</option>
+              </select>
+            </label>
+            <label>
+              Version
+              <input name="version" type="text" placeholder="v1, v2, signe..." />
+            </label>
+            <label>
+              Responsable
+              <input name="documentOwner" type="text" placeholder="Nom du responsable" />
+            </label>
+            <label>
+              Validation attendue
+              <input name="validationNeed" type="text" placeholder="Admin, Comptable, RH..." />
+            </label>
             <label className="wide-field">
               Notes
               <textarea name="notes" placeholder="Contexte, validation, version"></textarea>
@@ -4148,6 +5425,22 @@ function DocumentsPage({ isAdmin }) {
               Montant
               <input name="amountFcfa" type="number" min="0" placeholder="FCFA" />
             </label>
+            <label>
+              Objet commercial
+              <input name="businessPurpose" type="text" placeholder="Prestation, facture, contrat..." />
+            </label>
+            <label>
+              Delai validite
+              <input name="validityDelay" type="text" placeholder="15 jours, 30 jours..." />
+            </label>
+            <label>
+              Signataire attendu
+              <input name="expectedSigner" type="text" placeholder="Direction, client, partenaire..." />
+            </label>
+            <label className="wide-field">
+              Conditions de paiement
+              <textarea name="paymentTerms" placeholder="Acompte, solde, delai et mode de paiement"></textarea>
+            </label>
             <label className="wide-field">
               Notes
               <textarea name="notes" placeholder="Elements a faire apparaitre"></textarea>
@@ -4178,9 +5471,13 @@ function DocumentsPage({ isAdmin }) {
                 <small>{businessDocumentStatusLabel(document.status)}</small>
               </div>
               <div className="approval-actions">
-                <a className="secondary-button bordered" href={document.url} target="_blank" rel="noreferrer">
+                <button
+                  type="button"
+                  className="secondary-button bordered"
+                  onClick={() => openDocument(document)}
+                >
                   Ouvrir
-                </a>
+                </button>
                 {isAdmin && (
                   <>
                     <button
@@ -4427,7 +5724,7 @@ function ReportsPage() {
   )
 }
 
-function FinanceWorkspacePage() {
+function FinanceWorkspacePage({ isAdmin = false }) {
   const [summary, setSummary] = useState(null)
   const [eventFinance, setEventFinance] = useState(null)
   const [selectedEventId, setSelectedEventId] = useState('')
@@ -4530,7 +5827,12 @@ function FinanceWorkspacePage() {
           label: getFormValue(formData, 'label'),
           plannedAmountFcfa: Number(getFormValue(formData, 'plannedAmountFcfa') || 0),
           status: getFormValue(formData, 'status') || 'PENDING_APPROVAL',
-          notes: getFormValue(formData, 'notes'),
+          notes: buildStructuredNotes(formData, 'notes', [
+            { label: 'Categorie budget', name: 'budgetCategory' },
+            { label: 'Centre de cout', name: 'costCenter' },
+            { label: 'Justification', name: 'justification' },
+            { label: 'Marge de securite', name: 'safetyMarginFcfa', suffix: ' FCFA' },
+          ]),
         }),
       )
       event.currentTarget.reset()
@@ -4543,6 +5845,12 @@ function FinanceWorkspacePage() {
   }
 
   const validateBudget = async (budget, action) => {
+    // La decision budgetaire finale est une action sensible reservee a l'Admin.
+    if (!isAdmin) {
+      setNotice("Seul l'Admin peut valider ou rejeter un budget.")
+      return
+    }
+
     setIsSaving(true)
     setNotice('')
 
@@ -4581,7 +5889,11 @@ function FinanceWorkspacePage() {
           category: getFormValue(formData, 'category'),
           vendor: getFormValue(formData, 'vendor'),
           spentAt: getFormValue(formData, 'spentAt'),
-          notes: getFormValue(formData, 'notes'),
+          notes: buildStructuredNotes(formData, 'notes', [
+            { label: 'Reference piece', name: 'receiptReference' },
+            { label: 'Mode de paiement', name: 'paymentMethod' },
+            { label: 'Responsable validation', name: 'validatorName' },
+          ]),
         }),
       )
       event.currentTarget.reset()
@@ -4614,6 +5926,11 @@ function FinanceWorkspacePage() {
           paidAt: getFormValue(formData, 'paidAt'),
           method: getFormValue(formData, 'method'),
           reference: getFormValue(formData, 'reference'),
+          notes: buildStructuredNotes(formData, 'notes', [
+            { label: 'Beneficiaire', name: 'beneficiary' },
+            { label: 'Compte / numero', name: 'paymentAccount' },
+            { label: 'Condition', name: 'paymentCondition' },
+          ]),
         }),
       )
       event.currentTarget.reset()
@@ -4756,6 +6073,14 @@ function FinanceWorkspacePage() {
             <p className="eyebrow">Budget previsionnel</p>
             <form className="compact-event-form" onSubmit={submitBudget}>
               <input name="label" type="text" placeholder="Technique, communication..." required />
+              <select name="budgetCategory" defaultValue="Production">
+                <option value="Production">Production</option>
+                <option value="Technique">Technique</option>
+                <option value="Communication">Communication</option>
+                <option value="Logistique">Logistique</option>
+                <option value="RH / Personnel">RH / Personnel</option>
+                <option value="Administratif">Administratif</option>
+              </select>
               <input name="plannedAmountFcfa" type="number" min="0" placeholder="3000000" required />
               <select name="status" defaultValue="PENDING_APPROVAL">
                 {budgetStatusOptions.map((status) => (
@@ -4764,6 +6089,9 @@ function FinanceWorkspacePage() {
                   </option>
                 ))}
               </select>
+              <input name="costCenter" type="text" placeholder="Centre de cout" />
+              <input name="safetyMarginFcfa" type="number" min="0" placeholder="Marge securite FCFA" />
+              <input name="justification" type="text" placeholder="Justification budgetaire" />
               <input name="notes" type="text" placeholder="Notes" />
               <button type="submit" className="primary-button" disabled={isSaving}>
                 Ajouter
@@ -4775,24 +6103,28 @@ function FinanceWorkspacePage() {
                   <span>{budget.label}</span>
                   <strong>{formatFcfa(budget.plannedAmountFcfa)}</strong>
                   <em>{budgetStatusLabel(budget.status)}</em>
-                  <div className="table-actions">
-                    <button
-                      type="button"
-                      className="secondary-button bordered"
-                      disabled={isSaving}
-                      onClick={() => validateBudget(budget, 'approve')}
-                    >
-                      Valider
-                    </button>
-                    <button
-                      type="button"
-                      className="danger-button"
-                      disabled={isSaving}
-                      onClick={() => validateBudget(budget, 'reject')}
-                    >
-                      Rejeter
-                    </button>
-                  </div>
+                  {isAdmin ? (
+                    <div className="table-actions">
+                      <button
+                        type="button"
+                        className="secondary-button bordered"
+                        disabled={isSaving}
+                        onClick={() => validateBudget(budget, 'approve')}
+                      >
+                        Valider
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-button"
+                        disabled={isSaving}
+                        onClick={() => validateBudget(budget, 'reject')}
+                      >
+                        Rejeter
+                      </button>
+                    </div>
+                  ) : (
+                    <small>Validation Admin requise</small>
+                  )}
                 </div>
               ))}
               {eventFinance.budgets.length === 0 && <p>Aucun budget previsionnel.</p>}
@@ -4804,9 +6136,20 @@ function FinanceWorkspacePage() {
             <form className="compact-event-form" onSubmit={submitExpense}>
               <input name="label" type="text" placeholder="Depense" required />
               <input name="amountFcfa" type="number" min="0" placeholder="850000" required />
-              <input name="category" type="text" placeholder="Categorie" />
+              <select name="category" defaultValue="Technique">
+                <option value="Technique">Technique</option>
+                <option value="Logistique">Logistique</option>
+                <option value="Communication">Communication</option>
+                <option value="Transport">Transport</option>
+                <option value="Hebergement">Hebergement</option>
+                <option value="Personnel">Personnel</option>
+                <option value="Autre">Autre</option>
+              </select>
               <input name="vendor" type="text" placeholder="Prestataire" />
               <input name="spentAt" type="datetime-local" />
+              <input name="receiptReference" type="text" placeholder="Reference piece" />
+              <input name="paymentMethod" type="text" placeholder="Mode paiement" />
+              <input name="validatorName" type="text" placeholder="Valide par" />
               <input name="notes" type="text" placeholder="Notes" />
               <button type="submit" className="primary-button" disabled={isSaving}>
                 Ajouter
@@ -4839,6 +6182,10 @@ function FinanceWorkspacePage() {
               <input name="paidAt" type="datetime-local" />
               <input name="method" type="text" placeholder="Mobile money, virement..." />
               <input name="reference" type="text" placeholder="Reference" />
+              <input name="beneficiary" type="text" placeholder="Beneficiaire" />
+              <input name="paymentAccount" type="text" placeholder="Compte / numero" />
+              <input name="paymentCondition" type="text" placeholder="Condition de paiement" />
+              <input name="notes" type="text" placeholder="Notes internes" />
               <button type="submit" className="primary-button" disabled={isSaving}>
                 Ajouter
               </button>
@@ -4898,7 +6245,7 @@ function FinanceWorkspacePage() {
   )
 }
 
-function EventsPage() {
+function EventsPage({ user }) {
   const [events, setEvents] = useState([])
   const [users, setUsers] = useState([])
   const [selectedEventId, setSelectedEventId] = useState('')
@@ -4907,6 +6254,20 @@ function EventsPage() {
   const [isSaving, setIsSaving] = useState(false)
 
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? events[0]
+  const canCreateEvent =
+    user.roleValues.includes('ADMIN') ||
+    user.roleValues.includes('RH') ||
+    user.roleValues.includes('COMMERCIAL') ||
+    user.roleValues.includes('SECRETAIRE')
+  const canManageEvent =
+    user.roleValues.includes('ADMIN') ||
+    user.roleValues.includes('RH') ||
+    user.roleValues.includes('SECRETAIRE')
+  const canManageProduction = user.roleValues.includes('ADMIN') || user.roleValues.includes('RH')
+  const canAttachDocument =
+    canManageEvent ||
+    user.roleValues.includes('COMMERCIAL') ||
+    user.roleValues.includes('COMPTABLE')
 
   const refreshEvents = useCallback(async () => {
     setIsLoading(true)
@@ -4971,7 +6332,14 @@ function EventsPage() {
     try {
       const created = await api.createEvent({
         title: getFormValue(formData, 'title'),
-        description: getFormValue(formData, 'description'),
+        description: buildStructuredNotes(formData, 'description', [
+          { label: 'Type evenement', name: 'eventType' },
+          { label: 'Public cible', name: 'targetAudience' },
+          { label: 'Jauge attendue', name: 'expectedGuests' },
+          { label: 'Mode acces', name: 'accessType' },
+          { label: 'Besoins production', name: 'productionNeeds' },
+          { label: 'Risques / contraintes', name: 'riskNotes' },
+        ]),
         location: getFormValue(formData, 'location'),
         startsAt: getFormValue(formData, 'startsAt'),
         endsAt: getFormValue(formData, 'endsAt'),
@@ -4994,6 +6362,12 @@ function EventsPage() {
       return
     }
 
+    // Seuls les profils de pilotage evenementiel peuvent modifier le statut.
+    if (!canManageEvent) {
+      setNotice("Votre role permet de consulter cet evenement, pas de modifier son statut.")
+      return
+    }
+
     setIsSaving(true)
     setNotice('')
 
@@ -5012,6 +6386,11 @@ function EventsPage() {
     const formData = new FormData(event.currentTarget)
 
     if (!selectedEvent) {
+      return
+    }
+
+    if (!canManageProduction) {
+      setNotice("Votre role ne permet pas d'affecter des responsables.")
       return
     }
 
@@ -5041,6 +6420,11 @@ function EventsPage() {
       return
     }
 
+    if (!canManageEvent) {
+      setNotice("Votre role ne permet pas de modifier la checklist.")
+      return
+    }
+
     setIsSaving(true)
     setNotice('')
 
@@ -5060,6 +6444,11 @@ function EventsPage() {
   }
 
   const toggleChecklistItem = async (item) => {
+    if (!canManageEvent) {
+      setNotice("Votre role permet de consulter la checklist, pas de la modifier.")
+      return
+    }
+
     setIsSaving(true)
     setNotice('')
 
@@ -5081,6 +6470,11 @@ function EventsPage() {
     const formData = new FormData(event.currentTarget)
 
     if (!selectedEvent) {
+      return
+    }
+
+    if (!canManageProduction) {
+      setNotice("Votre role ne permet pas de modifier le planning de production.")
       return
     }
 
@@ -5111,6 +6505,11 @@ function EventsPage() {
     const formData = new FormData(event.currentTarget)
 
     if (!selectedEvent) {
+      return
+    }
+
+    if (!canAttachDocument) {
+      setNotice("Votre role ne permet pas d'ajouter une piece jointe.")
       return
     }
 
@@ -5157,61 +6556,103 @@ function EventsPage() {
       {notice && <p className="auth-notice">{notice}</p>}
 
       <div className="event-workspace">
-        <form className="event-form settings-card" onSubmit={createEvent}>
-          {/* Creation rapide : chaque evenement commence par les informations de pilotage. */}
-          <p className="eyebrow">Creation</p>
-          <h2>Nouvel evenement.</h2>
-          <div className="form-grid">
-            <label>
-              Nom de l'evenement
-              <input name="title" type="text" placeholder="Concert prive - Plateau" required />
-            </label>
-            <label>
-              Lieu
-              <input name="location" type="text" placeholder="Abidjan" />
-            </label>
-            <label>
-              Debut
-              <input name="startsAt" type="datetime-local" required />
-            </label>
-            <label>
-              Fin
-              <input name="endsAt" type="datetime-local" />
-            </label>
-            <label>
-              Budget FCFA
-              <input name="budgetFcfa" type="number" min="0" placeholder="4500000" />
-            </label>
-            <label>
-              Statut
-              <select name="status" defaultValue="DRAFT">
-                {eventStatusOptions.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Responsable
-              <select name="responsibleId" defaultValue="">
-                <option value="">Non defini</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {`${user.lastName} ${user.firstName}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Description
-              <textarea name="description" placeholder="Brief, objectifs, contraintes..." />
-            </label>
-          </div>
-          <button type="submit" className="primary-button" disabled={isSaving}>
-            {isSaving ? 'Enregistrement...' : 'Creer l evenement'}
-          </button>
-        </form>
+        {canCreateEvent ? (
+          <form className="event-form settings-card" onSubmit={createEvent}>
+            {/* Creation rapide : chaque evenement commence par les informations de pilotage. */}
+            <p className="eyebrow">Creation</p>
+            <h2>Nouvel evenement.</h2>
+            <div className="form-grid">
+              <label>
+                Nom de l'evenement
+                <input name="title" type="text" placeholder="Concert prive - Plateau" required />
+              </label>
+              <label>
+                Lieu
+                <input name="location" type="text" placeholder="Abidjan" />
+              </label>
+              <label>
+                Type evenement
+                <select name="eventType" defaultValue="Concert">
+                  <option value="Concert">Concert</option>
+                  <option value="Ceremonie">Ceremonie</option>
+                  <option value="Conference">Conference</option>
+                  <option value="Activation de marque">Activation de marque</option>
+                  <option value="Production TV / digitale">Production TV / digitale</option>
+                  <option value="Autre">Autre</option>
+                </select>
+              </label>
+              <label>
+                Public cible
+                <input name="targetAudience" type="text" placeholder="VIP, grand public, entreprise..." />
+              </label>
+              <label>
+                Debut
+                <input name="startsAt" type="datetime-local" required />
+              </label>
+              <label>
+                Fin
+                <input name="endsAt" type="datetime-local" />
+              </label>
+              <label>
+                Budget FCFA
+                <input name="budgetFcfa" type="number" min="0" placeholder="4500000" />
+              </label>
+              <label>
+                Jauge attendue
+                <input name="expectedGuests" type="number" min="0" placeholder="1000" />
+              </label>
+              <label>
+                Mode acces
+                <select name="accessType" defaultValue="Invitation">
+                  <option value="Invitation">Invitation</option>
+                  <option value="Billetterie">Billetterie</option>
+                  <option value="Acces libre">Acces libre</option>
+                  <option value="Prive">Prive</option>
+                </select>
+              </label>
+              <label>
+                Statut
+                <select name="status" defaultValue="DRAFT">
+                  {eventStatusOptions.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Responsable
+                <select name="responsibleId" defaultValue="">
+                  <option value="">Non defini</option>
+                  {users.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {`${item.lastName} ${item.firstName}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Description
+                <textarea name="description" placeholder="Brief, objectifs, contraintes..." />
+              </label>
+              <label className="wide-field">
+                Besoins production
+                <textarea name="productionNeeds" placeholder="Scene, son, lumiere, captation, backline, securite..." />
+              </label>
+              <label className="wide-field">
+                Risques / contraintes
+                <textarea name="riskNotes" placeholder="Autorisation, acces, meteo, securite, protocole..." />
+              </label>
+            </div>
+            <button type="submit" className="primary-button" disabled={isSaving}>
+              {isSaving ? 'Enregistrement...' : 'Creer l evenement'}
+            </button>
+          </form>
+        ) : (
+          <section className="settings-card">
+            <p className="approval-empty">Votre role permet de consulter les evenements, pas d'en creer.</p>
+          </section>
+        )}
 
         <section className="event-list-panel settings-card">
           <div className="settings-panel-heading">
@@ -5255,16 +6696,20 @@ function EventsPage() {
                 <h2>{selectedEvent.title}</h2>
                 <p>{selectedEvent.description || 'Aucune description renseignee.'}</p>
               </div>
-              <select
-                value={selectedEvent.status}
-                onChange={(event) => updateEventStatus(event.target.value)}
-              >
-                {eventStatusOptions.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
+              {canManageEvent ? (
+                <select
+                  value={selectedEvent.status}
+                  onChange={(event) => updateEventStatus(event.target.value)}
+                >
+                  {eventStatusOptions.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="role-badge">{eventStatusLabel(selectedEvent.status)}</span>
+              )}
             </div>
             <div className="settings-meta-grid">
               <article>
@@ -5294,30 +6739,34 @@ function EventsPage() {
 
           <article className="settings-card">
             <p className="eyebrow">Planning de production</p>
-            <form className="compact-event-form" onSubmit={addProductionStep}>
-              <input name="title" type="text" placeholder="Etape de production" required />
-              <input name="startsAt" type="datetime-local" />
-              <input name="endsAt" type="datetime-local" />
-              <select name="ownerId" defaultValue="">
-                <option value="">Responsable</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {`${user.lastName} ${user.firstName}`}
-                  </option>
-                ))}
-              </select>
-              <select name="status" defaultValue="IN_PREPARATION">
-                {eventStatusOptions.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
-              <input name="notes" type="text" placeholder="Notes" />
-              <button type="submit" className="primary-button" disabled={isSaving}>
-                Ajouter
-              </button>
-            </form>
+            {canManageProduction ? (
+              <form className="compact-event-form" onSubmit={addProductionStep}>
+                <input name="title" type="text" placeholder="Etape de production" required />
+                <input name="startsAt" type="datetime-local" />
+                <input name="endsAt" type="datetime-local" />
+                <select name="ownerId" defaultValue="">
+                  <option value="">Responsable</option>
+                  {users.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {`${item.lastName} ${item.firstName}`}
+                    </option>
+                  ))}
+                </select>
+                <select name="status" defaultValue="IN_PREPARATION">
+                  {eventStatusOptions.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+                <input name="notes" type="text" placeholder="Notes" />
+                <button type="submit" className="primary-button" disabled={isSaving}>
+                  Ajouter
+                </button>
+              </form>
+            ) : (
+              <p className="approval-empty">Planning consultable en lecture seule pour votre role.</p>
+            )}
             <ul className="event-timeline">
               {selectedEvent.steps.map((step) => (
                 <li key={step.id}>
@@ -5337,13 +6786,17 @@ function EventsPage() {
 
           <article className="settings-card">
             <p className="eyebrow">Checklist avant evenement</p>
-            <form className="compact-event-form two" onSubmit={addChecklistItem}>
-              <input name="title" type="text" placeholder="Element a verifier" required />
-              <input name="dueAt" type="datetime-local" />
-              <button type="submit" className="primary-button" disabled={isSaving}>
-                Ajouter
-              </button>
-            </form>
+            {canManageEvent ? (
+              <form className="compact-event-form two" onSubmit={addChecklistItem}>
+                <input name="title" type="text" placeholder="Element a verifier" required />
+                <input name="dueAt" type="datetime-local" />
+                <button type="submit" className="primary-button" disabled={isSaving}>
+                  Ajouter
+                </button>
+              </form>
+            ) : (
+              <p className="approval-empty">Checklist visible sans modification pour votre role.</p>
+            )}
             <ul className="event-checklist">
               {selectedEvent.checklist.map((item) => (
                 <li key={item.id}>
@@ -5351,6 +6804,7 @@ function EventsPage() {
                     <input
                       type="checkbox"
                       checked={item.isDone}
+                      disabled={!canManageEvent || isSaving}
                       onChange={() => toggleChecklistItem(item)}
                     />
                     <span>{item.title}</span>
@@ -5364,20 +6818,24 @@ function EventsPage() {
 
           <article className="settings-card">
             <p className="eyebrow">Responsables affectes</p>
-            <form className="compact-event-form two" onSubmit={addAssignment}>
-              <select name="userId" required defaultValue="">
-                <option value="">Choisir un utilisateur</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {`${user.lastName} ${user.firstName}`}
-                  </option>
-                ))}
-              </select>
-              <input name="roleNote" type="text" placeholder="Mission sur l'evenement" />
-              <button type="submit" className="primary-button" disabled={isSaving}>
-                Affecter
-              </button>
-            </form>
+            {canManageProduction ? (
+              <form className="compact-event-form two" onSubmit={addAssignment}>
+                <select name="userId" required defaultValue="">
+                  <option value="">Choisir un utilisateur</option>
+                  {users.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {`${item.lastName} ${item.firstName}`}
+                    </option>
+                  ))}
+                </select>
+                <input name="roleNote" type="text" placeholder="Mission sur l'evenement" />
+                <button type="submit" className="primary-button" disabled={isSaving}>
+                  Affecter
+                </button>
+              </form>
+            ) : (
+              <p className="approval-empty">Affectations visibles sans modification pour votre role.</p>
+            )}
             <ul className="compact-list">
               {selectedEvent.assignments.map((assignment) => (
                 <li key={assignment.id}>
@@ -5391,21 +6849,25 @@ function EventsPage() {
 
           <article className="settings-card event-documents">
             <p className="eyebrow">Pieces jointes</p>
-            <form className="compact-event-form" onSubmit={addAttachment}>
-              <input name="label" type="text" placeholder="Contrat, devis, fiche..." required />
-              <select name="type" defaultValue="CONTRACT">
-                {eventAttachmentTypes.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-              <input name="url" type="url" placeholder="Lien document" />
-              <input name="file" type="file" />
-              <button type="submit" className="primary-button" disabled={isSaving}>
-                Ajouter
-              </button>
-            </form>
+            {canAttachDocument ? (
+              <form className="compact-event-form" onSubmit={addAttachment}>
+                <input name="label" type="text" placeholder="Contrat, devis, fiche..." required />
+                <select name="type" defaultValue="CONTRACT">
+                  {eventAttachmentTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+                <input name="url" type="url" placeholder="Lien document" />
+                <input name="file" type="file" />
+                <button type="submit" className="primary-button" disabled={isSaving}>
+                  Ajouter
+                </button>
+              </form>
+            ) : (
+              <p className="approval-empty">Pieces jointes consultables uniquement pour votre role.</p>
+            )}
             <div className="document-grid">
               {selectedEvent.attachments.map((attachment) => (
                 <a href={attachment.url} target="_blank" rel="noreferrer" key={attachment.id}>
@@ -5423,7 +6885,7 @@ function EventsPage() {
   )
 }
 
-function FinancePage() {
+function FinancePage({ isAdmin }) {
   return (
     <section className="module-page">
       <ModuleHeader
@@ -5432,7 +6894,7 @@ function FinancePage() {
         label="Controle financier"
         title="Finance."
       />
-      <FinanceWorkspacePage />
+      <FinanceWorkspacePage isAdmin={isAdmin} />
     </section>
   )
 }
@@ -5528,7 +6990,12 @@ function TeamPage({ onHrEvent, pendingCount, user }) {
         internalRole: getFormValue(formData, 'internalRole'),
         department: getFormValue(formData, 'department'),
         availability: getFormValue(formData, 'availability') || 'AVAILABLE',
-        availabilityNotes: getFormValue(formData, 'availabilityNotes'),
+        availabilityNotes: buildStructuredNotes(formData, 'availabilityNotes', [
+          { label: 'Competences fortes', name: 'skills' },
+          { label: 'Mobilite', name: 'mobility' },
+          { label: 'Missions preferees', name: 'preferredTasks' },
+          { label: 'Certifications / habilitations', name: 'certifications' },
+        ]),
         emergencyContact: getFormValue(formData, 'emergencyContact'),
         hireDate: getFormValue(formData, 'hireDate'),
       })
@@ -5560,7 +7027,12 @@ function TeamPage({ onHrEvent, pendingCount, user }) {
         endsAt: getFormValue(formData, 'endsAt'),
         salaryFcfa: Number(getFormValue(formData, 'salaryFcfa') || 0),
         fileUrl: getFormValue(formData, 'fileUrl'),
-        notes: getFormValue(formData, 'notes'),
+        notes: buildStructuredNotes(formData, 'notes', [
+          { label: 'Reference contrat', name: 'contractReference' },
+          { label: 'Cycle de paiement', name: 'paymentCycle' },
+          { label: 'Avantages / primes', name: 'benefits' },
+          { label: 'Clause sensible', name: 'confidentialityClause' },
+        ]),
       })
       event.currentTarget.reset()
       await syncHrAction('Contrat ajoute au dossier RH.')
@@ -5620,7 +7092,12 @@ function TeamPage({ onHrEvent, pendingCount, user }) {
         status: getFormValue(formData, 'status') || 'PLANNED',
         startsAt: getFormValue(formData, 'startsAt'),
         endsAt: getFormValue(formData, 'endsAt'),
-        notes: getFormValue(formData, 'notes'),
+        notes: buildStructuredNotes(formData, 'notes', [
+          { label: 'Heure de convocation', name: 'callTime' },
+          { label: 'Lieu de mission', name: 'missionLocation' },
+          { label: 'Materiel necessaire', name: 'equipmentNeeds' },
+          { label: 'Contact terrain', name: 'reportingContact' },
+        ]),
       })
       event.currentTarget.reset()
       await syncHrAction('Mission affectee au personnel.')
@@ -5766,6 +7243,10 @@ function TeamPage({ onHrEvent, pendingCount, user }) {
                       defaultValue={selectedStaff.profile?.availabilityNotes ?? ''}
                       placeholder="Notes disponibilite"
                     />
+                    <input name="skills" type="text" placeholder="Competences fortes" />
+                    <input name="mobility" type="text" placeholder="Mobilite / zones possibles" />
+                    <input name="preferredTasks" type="text" placeholder="Missions preferees" />
+                    <input name="certifications" type="text" placeholder="Certifications / habilitations" />
                     <input
                       name="emergencyContact"
                       type="text"
@@ -5805,6 +7286,10 @@ function TeamPage({ onHrEvent, pendingCount, user }) {
                       <input name="startsAt" type="date" />
                       <input name="endsAt" type="date" />
                       <input name="salaryFcfa" type="number" min="0" placeholder="Montant FCFA" />
+                      <input name="contractReference" type="text" placeholder="Reference contrat" />
+                      <input name="paymentCycle" type="text" placeholder="Mensuel, mission, cachet..." />
+                      <input name="benefits" type="text" placeholder="Primes, transport, repas..." />
+                      <input name="confidentialityClause" type="text" placeholder="Clause sensible / NDA" />
                       <input name="fileUrl" type="url" placeholder="Lien fichier" />
                       <input name="notes" type="text" placeholder="Notes" />
                       <button type="submit" className="primary-button" disabled={isSaving}>
@@ -5876,6 +7361,10 @@ function TeamPage({ onHrEvent, pendingCount, user }) {
                     </select>
                     <input name="startsAt" type="datetime-local" />
                     <input name="endsAt" type="datetime-local" />
+                    <input name="callTime" type="datetime-local" />
+                    <input name="missionLocation" type="text" placeholder="Lieu de mission" />
+                    <input name="equipmentNeeds" type="text" placeholder="Materiel / tenue / badge" />
+                    <input name="reportingContact" type="text" placeholder="Contact terrain" />
                     <input name="notes" type="text" placeholder="Notes" />
                     <button type="submit" className="primary-button" disabled={isSaving}>
                       Affecter
@@ -6135,7 +7624,13 @@ function WorkflowPage({ onWorkflowEvent, user }) {
     try {
       const workflow = await api.createWorkflow({
         title: getFormValue(formData, 'title'),
-        description: getFormValue(formData, 'description'),
+        description: buildStructuredNotes(formData, 'description', [
+          { label: 'Priorite', name: 'priority' },
+          { label: 'Impact budget', name: 'budgetImpact' },
+          { label: 'Besoin RH', name: 'hrNeed' },
+          { label: 'Livrable attendu', name: 'expectedDeliverable' },
+          { label: 'Echeance souhaitee', name: 'dueAt' },
+        ]),
         eventId: getFormValue(formData, 'eventId'),
       })
       syncWorkflow(workflow)
@@ -6279,6 +7774,16 @@ function WorkflowPage({ onWorkflowEvent, user }) {
                 </option>
               ))}
             </select>
+            <select name="priority" defaultValue="Normale">
+              <option value="Basse">Priorite basse</option>
+              <option value="Normale">Priorite normale</option>
+              <option value="Haute">Priorite haute</option>
+              <option value="Urgente">Priorite urgente</option>
+            </select>
+            <input name="budgetImpact" type="text" placeholder="Impact budget / enveloppe" />
+            <input name="hrNeed" type="text" placeholder="Besoin RH / profils" />
+            <input name="expectedDeliverable" type="text" placeholder="Livrable attendu" />
+            <input name="dueAt" type="datetime-local" />
             <input name="description" type="text" placeholder="Description courte" />
             <button type="submit" className="primary-button" disabled={isSaving}>
               Creer

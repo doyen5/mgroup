@@ -13,6 +13,7 @@ import {
 import { WorkflowsService } from './workflows.service';
 
 @UseGuards(JwtAuthGuard)
+@Roles(RoleName.ADMIN, RoleName.RH, RoleName.COMMERCIAL, RoleName.COMPTABLE)
 @Controller('workflows')
 export class WorkflowsController {
   constructor(private readonly workflows: WorkflowsService) {}
