@@ -23,6 +23,12 @@ export class NotificationsController {
     return this.notifications.unreadCount(user);
   }
 
+  @Patch('read-all')
+  markAllRead(@CurrentUser() user: AuthenticatedUser) {
+    // Action groupée pour traiter rapidement le panneau notifications.
+    return this.notifications.markAllRead(user);
+  }
+
   @Patch(':id/read')
   markRead(@Param('id') notificationId: string, @CurrentUser() user: AuthenticatedUser) {
     // La lecture est auditee pour garder la trace des alertes sensibles vues.

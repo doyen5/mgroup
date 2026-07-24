@@ -92,6 +92,35 @@ export class NotificationsService {
     return updated;
   }
 
+  async markAllRead(user: AuthenticatedUser) {
+    const now = new Date();
+
+    // Lecture groupée : utile pour vider le panneau de notifications sans perdre l'historique.
+    const result = await this.prisma.notification.updateMany({
+      where: {
+        userId: user.sub,
+        readAt: null,
+      },
+      data: {
+        readAt: now,
+        status: NotificationStatus.READ,
+      },
+    });
+
+    await this.prisma.loginAuditLog.create({
+      data: {
+        userId: user.sub,
+        action: AuditAction.NOTIFICATION_READ,
+        metadata: { all: true, count: result.count },
+      },
+    });
+
+    return {
+      count: result.count,
+      readAt: now,
+    };
+  }
+
   async notifyUser(userId: string, payload: NotificationPayload) {
     const recipient = await this.prisma.user.findUnique({
       where: { id: userId },

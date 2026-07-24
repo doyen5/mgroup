@@ -366,8 +366,11 @@ Le dashboard Admin contient maintenant :
 - des alertes sonores cote navigateur pour prevenir l'Admin lors des changements importants ;
 - la validation des inscriptions en attente depuis PostgreSQL.
 - une section `Parametres` complete pour le profil, la securite, l'entreprise, les utilisateurs, les preferences, les notifications, les modules et le journal d'activite.
+- un mode clair/sombre applique aux dashboards, cartes, formulaires, listes, filtres et nouveaux panneaux metier ;
+- une langue Francais/Anglais appliquee aux libelles principaux du dashboard, aux notifications et aux vues evenementielles ;
+- un responsive mobile ameliore avec sidebar scrollable/compacte, boutons empiles et grilles transformeables en une colonne.
 
-La page `Alertes` permet d'activer/desactiver le son et de tester une notification. Le son est genere dans le navigateur avec Web Audio API, sans fichier audio externe.
+La page `Alertes` permet d'activer/desactiver le son et de tester une notification. Le son est genere dans le navigateur avec Web Audio API, sans fichier audio externe. Elle propose aussi un panneau propre avec filtres `Toutes`, `Non lues`, `Lues`, filtre par priorite, badges de priorite et action `Tout marquer comme lu`.
 
 ## Dashboards par profil
 
@@ -549,6 +552,12 @@ Dans `Parametres > Affichage`, l'utilisateur peut regler :
 
 Ces preferences sont maintenant sauvegardees en base dans la table `InterfacePreference`.
 Elles suivent donc l'utilisateur entre plusieurs connexions.
+Le frontend applique ces preferences sur le conteneur dashboard et sur le document HTML :
+
+- le theme clair/sombre change les variables de couleurs des dashboards ;
+- la langue met a jour les principaux libelles et l'attribut `lang` du document ;
+- la densite agit sur les espacements ;
+- les couleurs principale/accent changent les boutons, badges, graphiques et icones.
 
 Routes utilisees :
 
@@ -603,13 +612,20 @@ Fonctionnalites disponibles :
 - checklist avant evenement avec cases a cocher ;
 - statuts : `DRAFT`, `IN_PREPARATION`, `VALIDATED`, `COMPLETED`, `CANCELLED` ;
 - calendrier/liste des evenements dans le dashboard ;
+- calendrier mensuel compact dans le panneau Evenements avec selection directe du jour ;
+- bande d'alertes d'echeances a 14 jours pour anticiper les dates importantes ;
 - recherche, filtre par statut, tri et pagination dans la liste des evenements ;
 - modification rapide de la fiche evenement : titre, lieu, dates, budget, statut, responsable et description ;
 - suppression controlee d'un evenement par les roles autorises ;
+- planning de production en vue timeline visuelle, en plus de la liste detaillee ;
+- lecture du taux de preparation base sur checklist, planning, affectations et pieces jointes ;
+- affichage des disponibilites RH lors des affectations si le profil a acces au module RH ;
 - pieces jointes : contrats, fiches techniques, devis, photos ou autre document ;
+- rapport final apres evenement : budget previsionnel/valide, depenses reelles, paiements, documents, photos, incidents et bilan ;
+- generation du rapport final dans le centre documentaire sous forme de document `REPORT` a valider/archiver ;
 - droits par profil : Commercial/Secretaire peuvent creer un evenement, RH/Admin gerent production, affectations et checklist, Commercial/Comptable peuvent joindre des pieces utiles.
 
-Le frontend utilise maintenant la page `Evenements` du dashboard au lieu des donnees statiques. Les pieces jointes peuvent etre ajoutees par lien ou fichier local converti en Data URL pour le prototype. En production, il faudra remplacer les Data URLs par un stockage fichier reel.
+Le frontend utilise maintenant la page `Evenements` du dashboard au lieu des donnees statiques. Les pieces jointes peuvent etre ajoutees par lien ou fichier local converti en Data URL pour le prototype. En production, il faudra remplacer les Data URLs par un stockage fichier reel. Le backend renvoie maintenant les budgets, depenses, paiements, documents financiers et documents metier lies a l'evenement pour alimenter la synthese et le rapport final.
 
 Tables ajoutees :
 
@@ -706,6 +722,8 @@ Le module notifications centralise les alertes importantes :
 - notification quand un budget attend validation ;
 - notification quand un budget depasse la limite ;
 - notification quand un workflow change d'etape.
+- panneau notifications avec lecture `lu/non lu`, filtre de priorite et lecture groupee ;
+- route backend pour marquer toutes les notifications de l'utilisateur comme lues.
 
 Table ajoutee :
 
@@ -716,6 +734,7 @@ Routes principales :
 ```txt
 GET   /api/notifications
 GET   /api/notifications/unread-count
+PATCH /api/notifications/read-all
 PATCH /api/notifications/:id/read
 POST  /api/notifications/event-reminders
 ```

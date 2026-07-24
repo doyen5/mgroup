@@ -42,6 +42,21 @@ const eventInclude = {
   attachments: {
     orderBy: { createdAt: 'desc' as const },
   },
+  budgets: {
+    orderBy: { updatedAt: 'desc' as const },
+  },
+  expenses: {
+    orderBy: { spentAt: 'desc' as const },
+  },
+  payments: {
+    orderBy: [{ dueAt: 'asc' as const }, { createdAt: 'desc' as const }],
+  },
+  documents: {
+    orderBy: { createdAt: 'desc' as const },
+  },
+  businessDocuments: {
+    orderBy: { createdAt: 'desc' as const },
+  },
 };
 
 @Injectable()

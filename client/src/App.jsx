@@ -212,6 +212,24 @@ const notificationTypeLabels = {
   EVENT_REMINDER: 'Rappel evenement',
   WORKFLOW_UPDATED: 'Workflow',
   EVENT_UPCOMING: 'Evenement proche',
+  COMMERCIAL_UPDATED: 'Commercial',
+  DOCUMENT_PENDING: 'Document',
+  REPORT_READY: 'Rapport',
+}
+
+const notificationPriorityCatalog = {
+  high: {
+    fr: 'Priorite haute',
+    en: 'High priority',
+  },
+  medium: {
+    fr: 'Priorite moyenne',
+    en: 'Medium priority',
+  },
+  low: {
+    fr: 'Priorite basse',
+    en: 'Low priority',
+  },
 }
 
 const staffAvailabilityOptions = [
@@ -376,6 +394,122 @@ const formatDateInput = (value) => {
   return offsetDate.toISOString().slice(0, 16)
 }
 
+const getDaysUntil = (value) => {
+  const date = dateFromValue(value)
+
+  if (!date || Number.isNaN(date.getTime())) {
+    return null
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(date)
+  target.setHours(0, 0, 0, 0)
+
+  return Math.ceil((target.getTime() - today.getTime()) / 86400000)
+}
+
+const getEventReadiness = (event) => {
+  const checklist = event?.checklist ?? []
+  const steps = event?.steps ?? []
+  const assignments = event?.assignments ?? []
+  const attachments = event?.attachments ?? []
+  const checklistScore = checklist.length
+    ? (checklist.filter((item) => item.isDone).length / checklist.length) * 40
+    : 8
+  const stepsScore = steps.length ? Math.min(25, steps.length * 6) : 0
+  const assignmentScore = assignments.length ? 20 : 0
+  const documentScore = attachments.length ? 15 : 0
+
+  return clampPercent(checklistScore + stepsScore + assignmentScore + documentScore)
+}
+
+const buildEventCalendarDays = (events, referenceDate = new Date()) => {
+  const year = referenceDate.getFullYear()
+  const month = referenceDate.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const firstWeekDay = (firstDay.getDay() + 6) % 7
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells = []
+
+  for (let index = 0; index < firstWeekDay; index += 1) {
+    cells.push(null)
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const dayEvents = events.filter((event) => {
+      const eventDate = dateFromValue(event.startsAt)
+      return (
+        eventDate &&
+        !Number.isNaN(eventDate.getTime()) &&
+        eventDate.getFullYear() === year &&
+        eventDate.getMonth() === month &&
+        eventDate.getDate() === day
+      )
+    })
+
+    cells.push({
+      day,
+      events: dayEvents,
+      isToday:
+        new Date().getFullYear() === year &&
+        new Date().getMonth() === month &&
+        new Date().getDate() === day,
+    })
+  }
+
+  return cells
+}
+
+const getEventFinancialSummary = (event) => {
+  const plannedBudget = (event?.budgets ?? []).reduce(
+    (total, budget) => total + (budget.approvedAmountFcfa ?? budget.plannedAmountFcfa ?? 0),
+    event?.budgetFcfa ?? 0,
+  )
+  const actualExpenses = (event?.expenses ?? []).reduce(
+    (total, expense) => total + (expense.amountFcfa ?? 0),
+    0,
+  )
+  const paidAmount = (event?.payments ?? []).reduce(
+    (total, payment) => total + (payment.status === 'PAID' ? payment.amountFcfa ?? 0 : 0),
+    0,
+  )
+
+  return {
+    actualExpenses,
+    balance: plannedBudget - actualExpenses,
+    paidAmount,
+    plannedBudget,
+  }
+}
+
+const buildEventFinalReportNotes = (event, incidentNotes, conclusionNotes) => {
+  const finance = getEventFinancialSummary(event)
+  const photos = (event?.attachments ?? []).filter((attachment) => attachment.type === 'PHOTO').length
+  const documents = [
+    ...(event?.attachments ?? []),
+    ...(event?.documents ?? []),
+    ...(event?.businessDocuments ?? []),
+  ].length
+  const checklistTotal = event?.checklist?.length ?? 0
+  const checklistDone = (event?.checklist ?? []).filter((item) => item.isDone).length
+
+  return [
+    `Evenement : ${event?.title ?? 'Non defini'}`,
+    `Statut : ${eventStatusLabel(event?.status)}`,
+    `Lieu : ${event?.location ?? 'Non renseigne'}`,
+    `Budget previsionnel/valide : ${formatFcfa(finance.plannedBudget)}`,
+    `Depenses reelles : ${formatFcfa(finance.actualExpenses)}`,
+    `Solde estime : ${formatFcfa(finance.balance)}`,
+    `Paiements encaisses : ${formatFcfa(finance.paidAmount)}`,
+    `Checklist : ${checklistDone}/${checklistTotal} element(s) termines`,
+    `Photos rattachees : ${photos}`,
+    `Documents rattaches : ${documents}`,
+    `Incidents : ${incidentNotes || 'Aucun incident renseigne'}`,
+    `Bilan : ${conclusionNotes || 'Bilan a completer'}`,
+  ].join('\n')
+}
+
 const eventStatusLabel = (status) =>
   eventStatusOptions.find((option) => option.value === status)?.label ?? status
 
@@ -397,6 +531,27 @@ const workflowStatusLabel = (status) =>
 const workflowActionLabel = (action) => workflowActionLabels[action] ?? action
 
 const notificationTypeLabel = (type) => notificationTypeLabels[type] ?? type
+
+const notificationPriority = (notification) => {
+  if (notification.type === 'BUDGET_OVER_LIMIT') {
+    return 'high'
+  }
+
+  if (
+    ['BUDGET_PENDING', 'DOCUMENT_PENDING', 'EVENT_REMINDER', 'EVENT_UPCOMING'].includes(
+      notification.type,
+    )
+  ) {
+    return 'medium'
+  }
+
+  return 'low'
+}
+
+const notificationPriorityLabel = (priority, preferences = defaultInterfacePreferences) =>
+  notificationPriorityCatalog[priority]?.[preferences.language] ??
+  notificationPriorityCatalog[priority]?.fr ??
+  priority
 
 const staffAvailabilityLabel = (availability) =>
   staffAvailabilityOptions.find((option) => option.value === availability)?.label ?? availability
@@ -715,6 +870,66 @@ const interfaceLabels = {
 
 const interfaceText = (preferences, key) =>
   interfaceLabels[preferences.language]?.[key] ?? interfaceLabels.fr[key] ?? key
+
+const dashboardCopy = {
+  fr: {
+    alertsAll: 'Toutes',
+    alertsDescription:
+      'Centralisez les alertes in-app, email, WhatsApp, SMS et les rappels automatiques avant evenement.',
+    alertsHigh: 'Haute',
+    alertsLow: 'Basse',
+    alertsMedium: 'Moyenne',
+    alertsRead: 'Lues',
+    alertsTitle: 'Alertes.',
+    alertsUnread: 'Non lues',
+    availability: 'Disponibilites',
+    calendar: 'Calendrier',
+    checklist: 'Checklist avant evenement',
+    eventCreation: 'Creation',
+    eventDescription:
+      'Creez les evenements, organisez le planning de production, affectez les responsables et centralisez les documents.',
+    eventDocuments: 'Pieces jointes',
+    eventFinalReport: 'Rapport final',
+    eventReady: 'pret',
+    eventTitle: 'Evenements.',
+    finalReportCta: 'Generer le rapport final',
+    finalReportHelp:
+      'Le rapport reprend le budget reel, les photos, les documents, les incidents et le bilan de production.',
+    markAllRead: 'Tout marquer comme lu',
+    productionTimeline: 'Planning de production',
+    upcomingAlerts: 'Alertes echeances',
+  },
+  en: {
+    alertsAll: 'All',
+    alertsDescription:
+      'Centralize in-app, email, WhatsApp, SMS alerts and automatic reminders before events.',
+    alertsHigh: 'High',
+    alertsLow: 'Low',
+    alertsMedium: 'Medium',
+    alertsRead: 'Read',
+    alertsTitle: 'Alerts.',
+    alertsUnread: 'Unread',
+    availability: 'Availability',
+    calendar: 'Calendar',
+    checklist: 'Pre-event checklist',
+    eventCreation: 'Creation',
+    eventDescription:
+      'Create events, organize production planning, assign owners and centralize documents.',
+    eventDocuments: 'Attachments',
+    eventFinalReport: 'Final report',
+    eventReady: 'ready',
+    eventTitle: 'Events.',
+    finalReportCta: 'Generate final report',
+    finalReportHelp:
+      'The report includes actual budget, photos, documents, incidents and production summary.',
+    markAllRead: 'Mark all as read',
+    productionTimeline: 'Production timeline',
+    upcomingAlerts: 'Deadline alerts',
+  },
+}
+
+const copyText = (preferences, key) =>
+  dashboardCopy[preferences.language]?.[key] ?? dashboardCopy.fr[key] ?? key
 
 const formatDashboardDateTime = (date, preferences = defaultInterfacePreferences) =>
   new Intl.DateTimeFormat(preferences.language === 'en' ? 'en-US' : 'fr-FR', {
@@ -2791,6 +3006,12 @@ function DashboardView({
     return () => window.clearInterval(intervalId)
   }, [])
 
+  useEffect(() => {
+    // Les preferences s'appliquent aussi au document pour les lecteurs d'ecran et styles globaux.
+    document.documentElement.lang = activePreferences.language === 'en' ? 'en' : 'fr'
+    document.documentElement.dataset.dashboardTheme = activePreferences.theme
+  }, [activePreferences.language, activePreferences.theme])
+
   // Le dashboard admin charge les demandes PENDING depuis PostgreSQL.
   useEffect(() => {
     if (!isAdmin) {
@@ -3043,7 +3264,7 @@ function DashboardView({
         ) : activePanelId === 'workflows' ? (
           <WorkflowPage onWorkflowEvent={playAdminSound} user={user} />
         ) : activePanelId === 'events' ? (
-          <EventsPage user={user} />
+          <EventsPage preferences={activePreferences} user={user} />
         ) : activePanelId === 'commercial' ? (
           <CommercialPage user={user} />
         ) : activePanelId === 'finance' ? (
@@ -3062,6 +3283,7 @@ function DashboardView({
             onNotificationsChanged={setNotificationCount}
             onTestSound={() => playAdminSound('Test alerte sonore')}
             onToggleSound={toggleSound}
+            preferences={activePreferences}
             soundEnabled={soundEnabled}
           />
         ) : (
@@ -6881,14 +7103,17 @@ function FinanceWorkspacePage({ isAdmin = false }) {
   )
 }
 
-function EventsPage({ user }) {
+function EventsPage({ preferences, user }) {
   const [events, setEvents] = useState([])
   const [users, setUsers] = useState([])
+  const [staffMembers, setStaffMembers] = useState([])
   const [selectedEventId, setSelectedEventId] = useState('')
   const [notice, setNotice] = useState('')
+  const [generatedReport, setGeneratedReport] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [eventListState, setEventListState] = useState(defaultListState)
+  const activePreferences = normalizeInterfacePreferences(preferences)
 
   const selectedEvent = events.find((event) => event.id === selectedEventId) ?? events[0]
   const eventList = applyListControls(events, eventListState, {
@@ -6915,27 +7140,63 @@ function EventsPage({ user }) {
     canManageEvent ||
     user.roleValues.includes('COMMERCIAL') ||
     user.roleValues.includes('COMPTABLE')
+  const calendarCells = useMemo(() => buildEventCalendarDays(events), [events])
+  const nextDeadlines = useMemo(
+    () =>
+      events
+        .map((event) => ({ ...event, daysUntil: getDaysUntil(event.startsAt) }))
+        .filter((event) => event.daysUntil !== null && event.daysUntil >= 0 && event.daysUntil <= 14)
+        .sort((a, b) => a.daysUntil - b.daysUntil)
+        .slice(0, 4),
+    [events],
+  )
+  const overdueChecklist = (selectedEvent?.checklist ?? []).filter((item) => {
+    const daysUntil = getDaysUntil(item.dueAt)
+    return !item.isDone && daysUntil !== null && daysUntil < 0
+  })
+  const eventReadiness = getEventReadiness(selectedEvent)
+  const eventFinanceSummary = getEventFinancialSummary(selectedEvent)
+  const productionSteps = [...(selectedEvent?.steps ?? [])].sort((a, b) => {
+    const first = dateFromValue(a.startsAt)?.getTime() ?? 0
+    const second = dateFromValue(b.startsAt)?.getTime() ?? 0
+    return first - second
+  })
+  const availableStaff = staffMembers.filter((staff) => staff.profile?.availability === 'AVAILABLE')
+  const assignmentOptions = staffMembers.length ? staffMembers : users
+  const monthLabel = new Intl.DateTimeFormat(activePreferences.language === 'en' ? 'en-US' : 'fr-FR', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: activePreferences.timezone,
+  }).format(new Date())
 
   const refreshEvents = useCallback(async () => {
     setIsLoading(true)
     setNotice('')
 
     try {
-      const nextEvents = await api.getEvents()
+      const [nextEvents, nextStaff] = await Promise.all([
+        api.getEvents(),
+        canManageProduction ? api.getHrStaff().catch(() => []) : Promise.resolve([]),
+      ])
       setEvents(nextEvents)
+      setStaffMembers(nextStaff)
       setSelectedEventId((current) => current || nextEvents[0]?.id || '')
     } catch (error) {
       setNotice(error.message)
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [canManageProduction])
 
   useEffect(() => {
     let isMounted = true
 
-    Promise.all([api.getEvents(), api.getUsers().catch(() => [])])
-      .then(([nextEvents, nextUsers]) => {
+    Promise.all([
+      api.getEvents(),
+      api.getUsers().catch(() => []),
+      canManageProduction ? api.getHrStaff().catch(() => []) : Promise.resolve([]),
+    ])
+      .then(([nextEvents, nextUsers, nextStaff]) => {
         if (!isMounted) {
           return
         }
@@ -6943,6 +7204,7 @@ function EventsPage({ user }) {
         setEvents(nextEvents)
         setSelectedEventId(nextEvents[0]?.id || '')
         setUsers(nextUsers)
+        setStaffMembers(nextStaff)
       })
       .catch((error) => {
         if (isMounted) {
@@ -6958,7 +7220,7 @@ function EventsPage({ user }) {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [canManageProduction])
 
   const syncSelectedEvent = (updatedEvent) => {
     setEvents((current) => {
@@ -7250,6 +7512,40 @@ function EventsPage({ user }) {
     }
   }
 
+  const generateFinalReport = async (event) => {
+    event.preventDefault()
+
+    if (!selectedEvent) {
+      return
+    }
+
+    const formData = new FormData(event.currentTarget)
+    const incidentNotes = getFormValue(formData, 'incidentNotes')
+    const conclusionNotes = getFormValue(formData, 'conclusionNotes')
+    setIsSaving(true)
+    setNotice('')
+    setGeneratedReport(null)
+
+    try {
+      const report = await api.generateBusinessDocument({
+        scope: 'EVENT',
+        eventId: selectedEvent.id,
+        type: 'REPORT',
+        label: `Rapport final - ${selectedEvent.title}`,
+        amountFcfa: eventFinanceSummary.actualExpenses,
+        notes: buildEventFinalReportNotes(selectedEvent, incidentNotes, conclusionNotes),
+      })
+
+      setGeneratedReport(report)
+      event.currentTarget.reset()
+      setNotice('Rapport final genere et ajoute au centre documentaire.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const completionRate = selectedEvent?.checklist?.length
     ? Math.round(
         (selectedEvent.checklist.filter((item) => item.isDone).length /
@@ -7261,19 +7557,42 @@ function EventsPage({ user }) {
   return (
     <section className="module-page">
       <ModuleHeader
-        description="Creez les evenements, organisez le planning de production, affectez les responsables et centralisez les documents."
+        description={copyText(activePreferences, 'eventDescription')}
         icon={CalendarDays}
         label="Evenementiel"
-        title="Evenements."
+        title={copyText(activePreferences, 'eventTitle')}
       />
 
       {notice && <p className="auth-notice">{notice}</p>}
+
+      <section className="event-command-strip">
+        <article>
+          <CalendarDays size={19} aria-hidden="true" />
+          <span>{copyText(activePreferences, 'calendar')}</span>
+          <strong>{events.length}</strong>
+        </article>
+        <article>
+          <Gauge size={19} aria-hidden="true" />
+          <span>{copyText(activePreferences, 'eventReady')}</span>
+          <strong>{eventReadiness}%</strong>
+        </article>
+        <article>
+          <Users size={19} aria-hidden="true" />
+          <span>{copyText(activePreferences, 'availability')}</span>
+          <strong>{availableStaff.length || '-'}</strong>
+        </article>
+        <article>
+          <AlertTriangle size={19} aria-hidden="true" />
+          <span>{copyText(activePreferences, 'upcomingAlerts')}</span>
+          <strong>{nextDeadlines.length + overdueChecklist.length}</strong>
+        </article>
+      </section>
 
       <div className="event-workspace">
         {canCreateEvent ? (
           <form className="event-form settings-card" onSubmit={createEvent}>
             {/* Creation rapide : chaque evenement commence par les informations de pilotage. */}
-            <p className="eyebrow">Creation</p>
+            <p className="eyebrow">{copyText(activePreferences, 'eventCreation')}</p>
             <h2>Nouvel evenement.</h2>
             <div className="form-grid">
               <label>
@@ -7371,12 +7690,64 @@ function EventsPage({ user }) {
         <section className="event-list-panel settings-card">
           <div className="settings-panel-heading">
             <div>
-              <p className="eyebrow">Calendrier</p>
+              <p className="eyebrow">{copyText(activePreferences, 'calendar')}</p>
               <h2>{eventList.total} evenement(s).</h2>
             </div>
             <button type="button" className="secondary-button bordered" onClick={refreshEvents}>
               Actualiser
             </button>
+          </div>
+          <div className="event-calendar-card" aria-label="Calendrier des evenements">
+            <div className="event-calendar-head">
+              <strong>{monthLabel}</strong>
+              <span>{events.length} evenement(s)</span>
+            </div>
+            <div className="event-calendar-weekdays" aria-hidden="true">
+              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, index) => (
+                <span key={`${day}-${index}`}>{day}</span>
+              ))}
+            </div>
+            <div className="event-calendar-grid">
+              {calendarCells.map((cell, index) =>
+                cell ? (
+                  <button
+                    type="button"
+                    className={`event-calendar-day ${cell.isToday ? 'today' : ''} ${
+                      cell.events.length ? 'has-event' : ''
+                    }`}
+                    key={`${cell.day}-${index}`}
+                    onClick={() => cell.events[0] && setSelectedEventId(cell.events[0].id)}
+                    title={cell.events.map((event) => event.title).join(', ')}
+                  >
+                    <span>{cell.day}</span>
+                    {cell.events.length > 0 && <i>{cell.events.length}</i>}
+                  </button>
+                ) : (
+                  <span className="event-calendar-day empty" key={`empty-${index}`} />
+                ),
+              )}
+            </div>
+          </div>
+          <div className="deadline-strip">
+            <div className="deadline-strip-heading">
+              <AlertTriangle size={16} aria-hidden="true" />
+              <strong>{copyText(activePreferences, 'upcomingAlerts')}</strong>
+            </div>
+            {nextDeadlines.length ? (
+              nextDeadlines.map((event) => (
+                <button
+                  type="button"
+                  className="deadline-pill"
+                  key={event.id}
+                  onClick={() => setSelectedEventId(event.id)}
+                >
+                  <span>{event.daysUntil === 0 ? "Aujourd'hui" : `J-${event.daysUntil}`}</span>
+                  <strong>{event.title}</strong>
+                </button>
+              ))
+            ) : (
+              <p>Aucune echeance critique a 14 jours.</p>
+            )}
           </div>
           <ListToolbar
             listState={eventListState}
@@ -7532,7 +7903,7 @@ function EventsPage({ user }) {
           </article>
 
           <article className="settings-card">
-            <p className="eyebrow">Planning de production</p>
+            <p className="eyebrow">{copyText(activePreferences, 'productionTimeline')}</p>
             {canManageProduction ? (
               <form className="compact-event-form" onSubmit={addProductionStep}>
                 <input name="title" type="text" placeholder="Etape de production" required />
@@ -7561,6 +7932,26 @@ function EventsPage({ user }) {
             ) : (
               <p className="approval-empty">Planning consultable en lecture seule pour votre role.</p>
             )}
+            <div className="production-timeline-board">
+              {productionSteps.length ? (
+                productionSteps.map((step, index) => (
+                  <article key={step.id} style={{ '--step-index': index + 1 }}>
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    <div>
+                      <strong>{step.title}</strong>
+                      <small>
+                        {step.startsAt
+                          ? formatDashboardDate(new Date(step.startsAt), activePreferences)
+                          : 'Date a definir'}{' '}
+                        - {eventStatusLabel(step.status)}
+                      </small>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="approval-empty">Aucune etape planifiee.</p>
+              )}
+            </div>
             <ul className="event-timeline">
               {selectedEvent.steps.map((step) => (
                 <li key={step.id}>
@@ -7579,7 +7970,17 @@ function EventsPage({ user }) {
           </article>
 
           <article className="settings-card">
-            <p className="eyebrow">Checklist avant evenement</p>
+            <p className="eyebrow">{copyText(activePreferences, 'checklist')}</p>
+            <div className="checklist-readiness">
+              <strong>{completionRate}%</strong>
+              <span>{copyText(activePreferences, 'eventReady')}</span>
+              <i style={{ '--progress': `${completionRate}%` }} />
+            </div>
+            {overdueChecklist.length > 0 && (
+              <p className="event-warning">
+                {overdueChecklist.length} element(s) en retard dans la checklist.
+              </p>
+            )}
             {canManageEvent ? (
               <form className="compact-event-form two" onSubmit={addChecklistItem}>
                 <input name="title" type="text" placeholder="Element a verifier" required />
@@ -7612,13 +8013,31 @@ function EventsPage({ user }) {
 
           <article className="settings-card">
             <p className="eyebrow">Responsables affectes</p>
+            {staffMembers.length > 0 && (
+              <div className="availability-mini-grid" aria-label="Disponibilites equipe">
+                {staffAvailabilityOptions.map((availability) => {
+                  const total = staffMembers.filter(
+                    (staff) => staff.profile?.availability === availability.value,
+                  ).length
+
+                  return (
+                    <article key={availability.value}>
+                      <span>{availability.label}</span>
+                      <strong>{total}</strong>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
             {canManageProduction ? (
               <form className="compact-event-form two" onSubmit={addAssignment}>
                 <select name="userId" required defaultValue="">
                   <option value="">Choisir un utilisateur</option>
-                  {users.map((item) => (
+                  {assignmentOptions.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {`${item.lastName} ${item.firstName}`}
+                      {`${item.lastName} ${item.firstName}${
+                        item.profile?.availability ? ` - ${staffAvailabilityLabel(item.profile.availability)}` : ''
+                      }`}
                     </option>
                   ))}
                 </select>
@@ -7642,7 +8061,7 @@ function EventsPage({ user }) {
           </article>
 
           <article className="settings-card event-documents">
-            <p className="eyebrow">Pieces jointes</p>
+            <p className="eyebrow">{copyText(activePreferences, 'eventDocuments')}</p>
             {canAttachDocument ? (
               <form className="compact-event-form" onSubmit={addAttachment}>
                 <input name="label" type="text" placeholder="Contrat, devis, fiche..." required />
@@ -7672,6 +8091,61 @@ function EventsPage({ user }) {
               ))}
               {selectedEvent.attachments.length === 0 && <p>Aucune piece jointe.</p>}
             </div>
+          </article>
+
+          <article className="settings-card event-final-report">
+            <div className="settings-panel-heading">
+              <div>
+                <p className="eyebrow">{copyText(activePreferences, 'eventFinalReport')}</p>
+                <h2>Bilan post-evenement.</h2>
+                <p>{copyText(activePreferences, 'finalReportHelp')}</p>
+              </div>
+              <Trophy size={34} aria-hidden="true" />
+            </div>
+            <div className="event-report-grid">
+              <article>
+                <span>Budget</span>
+                <strong>{formatFcfa(eventFinanceSummary.plannedBudget)}</strong>
+              </article>
+              <article>
+                <span>Depenses</span>
+                <strong>{formatFcfa(eventFinanceSummary.actualExpenses)}</strong>
+              </article>
+              <article>
+                <span>Documents</span>
+                <strong>
+                  {(selectedEvent.attachments?.length ?? 0) +
+                    (selectedEvent.documents?.length ?? 0) +
+                    (selectedEvent.businessDocuments?.length ?? 0)}
+                </strong>
+              </article>
+              <article>
+                <span>Photos</span>
+                <strong>
+                  {(selectedEvent.attachments ?? []).filter((attachment) => attachment.type === 'PHOTO').length}
+                </strong>
+              </article>
+            </div>
+            <form className="compact-event-form" onSubmit={generateFinalReport}>
+              <label>
+                Incidents constates
+                <textarea name="incidentNotes" placeholder="Retards, contraintes, securite, litiges..." />
+              </label>
+              <label>
+                Bilan et recommandations
+                <textarea name="conclusionNotes" placeholder="Resultats, points forts, axes d'amelioration..." />
+              </label>
+              <button type="submit" className="primary-button" disabled={isSaving}>
+                <FileText size={17} aria-hidden="true" />
+                {copyText(activePreferences, 'finalReportCta')}
+              </button>
+            </form>
+            {generatedReport && (
+              <a className="report-ready-link" href={generatedReport.url} target="_blank" rel="noreferrer">
+                <CheckCircle2 size={18} aria-hidden="true" />
+                Ouvrir le rapport genere
+              </a>
+            )}
           </article>
         </section>
       )}
@@ -8752,11 +9226,31 @@ function WorkflowPage({ onWorkflowEvent, user }) {
   )
 }
 
-function AlertsPage({ notificationCount, onNotificationsChanged, onTestSound, onToggleSound, soundEnabled }) {
+function AlertsPage({
+  notificationCount,
+  onNotificationsChanged,
+  onTestSound,
+  onToggleSound,
+  preferences,
+  soundEnabled,
+}) {
   const [notifications, setNotifications] = useState([])
+  const [readFilter, setReadFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
   const [notice, setNotice] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const activePreferences = normalizeInterfacePreferences(preferences)
+  const filteredNotifications = notifications.filter((notification) => {
+    const priority = notificationPriority(notification)
+    const readMatch =
+      readFilter === 'all' ||
+      (readFilter === 'unread' && !notification.readAt) ||
+      (readFilter === 'read' && notification.readAt)
+    const priorityMatch = priorityFilter === 'all' || priority === priorityFilter
+
+    return readMatch && priorityMatch
+  })
 
   const refreshNotifications = useCallback(async () => {
     setIsLoading(true)
@@ -8821,6 +9315,28 @@ function AlertsPage({ notificationCount, onNotificationsChanged, onTestSound, on
     }
   }
 
+  const markAllAsRead = async () => {
+    setIsSaving(true)
+    setNotice('')
+
+    try {
+      await api.markAllNotificationsRead()
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.readAt
+            ? notification
+            : { ...notification, readAt: new Date().toISOString(), status: 'READ' },
+        ),
+      )
+      onNotificationsChanged(0)
+      setNotice('Toutes les notifications ont ete marquees comme lues.')
+    } catch (error) {
+      setNotice(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const sendReminders = async () => {
     setIsSaving(true)
     setNotice('')
@@ -8840,10 +9356,10 @@ function AlertsPage({ notificationCount, onNotificationsChanged, onTestSound, on
   return (
     <section className="module-page">
       <ModuleHeader
-        description="Centralisez les alertes in-app, email, WhatsApp, SMS et les rappels automatiques avant evenement."
+        description={copyText(activePreferences, 'alertsDescription')}
         icon={Bell}
         label="Alertes"
-        title="Alertes."
+        title={copyText(activePreferences, 'alertsTitle')}
       />
       {notice && <p className="auth-notice">{notice}</p>}
       <div className="alert-toolbar">
@@ -8863,6 +9379,37 @@ function AlertsPage({ notificationCount, onNotificationsChanged, onTestSound, on
           <Bell size={17} />
           Tester l'alerte
         </button>
+        <button
+          type="button"
+          className="secondary-button bordered"
+          disabled={isSaving || notificationCount === 0}
+          onClick={markAllAsRead}
+        >
+          <CheckCircle2 size={17} />
+          {copyText(activePreferences, 'markAllRead')}
+        </button>
+      </div>
+      <div className="notification-filters" aria-label="Filtres notifications">
+        {[
+          { value: 'all', label: copyText(activePreferences, 'alertsAll') },
+          { value: 'unread', label: copyText(activePreferences, 'alertsUnread') },
+          { value: 'read', label: copyText(activePreferences, 'alertsRead') },
+        ].map((filter) => (
+          <button
+            type="button"
+            className={readFilter === filter.value ? 'active' : ''}
+            key={filter.value}
+            onClick={() => setReadFilter(filter.value)}
+          >
+            {filter.label}
+          </button>
+        ))}
+        <select value={priorityFilter} onChange={(event) => setPriorityFilter(event.target.value)}>
+          <option value="all">{copyText(activePreferences, 'alertsAll')} priorites</option>
+          <option value="high">{copyText(activePreferences, 'alertsHigh')}</option>
+          <option value="medium">{copyText(activePreferences, 'alertsMedium')}</option>
+          <option value="low">{copyText(activePreferences, 'alertsLow')}</option>
+        </select>
       </div>
       <section className="workflow-stats">
         <article className="visual-panel">
@@ -8885,9 +9432,11 @@ function AlertsPage({ notificationCount, onNotificationsChanged, onTestSound, on
         </article>
       </section>
       <div className="alert-list">
-        {notifications.map((notification) => (
+        {filteredNotifications.map((notification) => (
           <article
-            className={`alert-card notification-card ${notification.readAt ? 'read' : 'unread'}`}
+            className={`alert-card notification-card ${notification.readAt ? 'read' : 'unread'} priority-${notificationPriority(
+              notification,
+            )}`}
             key={notification.id}
           >
             <AlertTriangle size={22} aria-hidden="true" />
@@ -8899,6 +9448,9 @@ function AlertsPage({ notificationCount, onNotificationsChanged, onTestSound, on
               </small>
             </div>
             <div className="table-actions">
+              <strong className="priority-badge">
+                {notificationPriorityLabel(notificationPriority(notification), activePreferences)}
+              </strong>
               <em>{notification.readAt ? 'Lue' : 'Non lue'}</em>
               {!notification.readAt && (
                 <button
@@ -8913,9 +9465,9 @@ function AlertsPage({ notificationCount, onNotificationsChanged, onTestSound, on
             </div>
           </article>
         ))}
-        {notifications.length === 0 && (
+        {filteredNotifications.length === 0 && (
           <p className="approval-empty">
-            {isLoading ? 'Chargement des alertes...' : 'Aucune notification pour le moment.'}
+            {isLoading ? 'Chargement des alertes...' : 'Aucune notification pour ces filtres.'}
           </p>
         )}
       </div>

@@ -357,6 +357,11 @@ export const api = {
       method: 'PATCH',
       body: {},
     }),
+  markAllNotificationsRead: () =>
+    request('/notifications/read-all', {
+      method: 'PATCH',
+      body: {},
+    }),
   sendEventReminders: () =>
     request('/notifications/event-reminders', {
       method: 'POST',
